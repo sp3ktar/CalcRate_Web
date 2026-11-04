@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>CalcRate</title>
 <meta name="description" content="Калькулятор с переменными и функциями и конвертер валют с комиссией">
 <meta name="theme-color" content="#000000">
@@ -509,34 +509,33 @@ input.fpars { all: unset; flex: 0 0 auto; min-width: 40px; font-family: var(--mo
 .demo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ===================== CalcRate for Chrome: one app window ===================== */
-/* The window keeps the iPhone Air width (420 pt) and its height up to 912 pt; lower browser windows get a lower one
-   (the calculator gives the keys and the expression what is left, as on the phone). Narrow windows — the whole width.
+/* A plain app, not a picture of a phone: no frame, no rounded corners; the app takes the whole height of the window
+   and its width up to 520 (wider windows keep it in the middle, on the same background). On a phone — the whole screen.
    The four screens lie on one another and keep their size (the lines and the rows are measured on every one);
    the open one is visible, the others are hidden and inert. */
 html, body { height: 100%; }
 body { padding: 0; overflow: hidden; }
-.screens { max-width: none; height: 100%; margin: 0; padding: 12px; box-sizing: border-box; gap: 0;
+.screens { max-width: none; height: 100%; margin: 0; padding: 0; box-sizing: border-box; gap: 0;
   display: grid; place-items: center; }
-.screens > .phone { grid-area: 1 / 1; visibility: hidden; height: min(914px, 100%); --top: 18px; }
+.screens > .phone { grid-area: 1 / 1; visibility: hidden; width: min(100%, 520px); max-width: none; height: 100%;
+  border: 0; border-radius: 0; --top: 18px; }
 .screens > .phone.cur { visibility: visible; z-index: 1; }
 .screens > .phone { padding-top: var(--top) !important; }
 .phone::before, .phone::after { content: none; display: none; }
 .island { display: none; }
-.toast.top { top: calc(var(--top) + 6px); }
-#setSheet { padding-top: calc(var(--top) + 6px); }
-#histSheet { top: calc(var(--top) + 10px); inset: calc(var(--top) + 10px) 0 0 0; }
-
 /* ===================== the home-screen app ===================== */
 /* the screens start below the iPhone's status bar and Dynamic Island (68 pt on the iPhone Air, as in the app) */
 .screens > .phone { --top: max(18px, env(safe-area-inset-top, 0px)); }
-html { touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
+/* no page zoom: neither by two fingers nor by a double tap; the iPhone also zooms into a field it thinks too small
+   (maximum-scale=1 in the viewport stops that) — a zoomed page cut the left edge off */
+html { touch-action: pan-x pan-y; -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
 html, body { overscroll-behavior: none; }
 body { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 input, textarea, select { -webkit-user-select: text; user-select: text; }
-@media (max-width: 470px), (max-height: 520px) {
-  .screens { padding: 0; }
-  .screens > .phone { width: 100%; max-width: none; height: 100%; border: 0; border-radius: 0; }
-}
+
+.toast.top { top: calc(var(--top) + 6px); }
+#setSheet { padding-top: calc(var(--top) + 6px); }
+#histSheet { top: calc(var(--top) + 10px); inset: calc(var(--top) + 10px) 0 0 0; }
 </style>
 
 <div hidden><input id="rowH" type="range" min="56" max="90" value="72"><output id="rowHO"></output></div>
@@ -551,7 +550,7 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
         <span class="mbadge rad" id="radBadge" hidden>RAD</span>
         <span class="mbadge" id="mBadge" hidden>M</span>
         <div class="strip pins" id="pins" aria-label="Закреплённые переменные и функции"></div>
-        <button type="button" class="tbicon tbpaste" id="tbPaste" aria-label="Вставить из буфера" title="Вставить"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4H6.5A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20H10"></path><path d="M15 4h2.5A1.5 1.5 0 0 1 19 5.5V9"></path><rect x="9" y="2.5" width="6" height="3.5" rx="1"></rect><rect x="11.5" y="10.5" width="9" height="11" rx="1.2"></rect><path d="M14 14h4M14 17h4"></path></svg></button>
+        <button type="button" class="tbicon tbpaste" id="tbPaste" aria-label="Вставить из буфера" title="Вставить" data-ta="Вставить из буфера" data-tt="Вставить"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4H6.5A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20H10"></path><path d="M15 4h2.5A1.5 1.5 0 0 1 19 5.5V9"></path><rect x="9" y="2.5" width="6" height="3.5" rx="1"></rect><rect x="11.5" y="10.5" width="9" height="11" rx="1.2"></rect><path d="M14 14h4M14 17h4"></path></svg></button>
       </div>
       <div class="expr" id="expr" aria-live="polite"></div>
       <div class="prow">
@@ -725,6 +724,10 @@ var DICT = {
   'Откреплено': ['Unpinned', '已取消固定', 'पिन हटाया गया', 'Desfijado', 'تم إلغاء التثبيت', 'Désépinglé', 'পিন সরানো হয়েছে', 'Desafixado', 'Sematan dilepas', 'پن ہٹا دی گئی'],
   'В буфере нет числа': ['No number on the clipboard', '剪贴板中没有数字', 'क्लिपबोर्ड में कोई संख्या नहीं है', 'No hay ningún número en el portapapeles', 'لا يوجد رقم في الحافظة', 'Aucun nombre dans le presse-papiers', 'ক্লিপবোর্ডে কোনো সংখ্যা নেই', 'Não há número na área de transferência', 'Tidak ada angka di papan klip', 'کلپ بورڈ میں کوئی نمبر نہیں'],
   'Это число сюда не подходит: {0}': ["This number doesn't fit here: {0}", '此数字不适用于此处：{0}', 'यह संख्या यहाँ नहीं आ सकती: {0}', 'Este número no cabe aquí: {0}', 'هذا الرقم لا يناسب هنا: {0}', 'Ce nombre ne convient pas ici : {0}', 'এই সংখ্যাটি এখানে খাটে না: {0}', 'Este número não serve aqui: {0}', 'Angka ini tidak cocok di sini: {0}', 'یہ نمبر یہاں فٹ نہیں ہوتا: {0}'],
+  'Вставить из буфера': ['Paste from clipboard', '从剪贴板粘贴', 'क्लिपबोर्ड से पेस्ट करें', 'Pegar del portapapeles', 'لصق من الحافظة', 'Coller depuis le presse-papiers', 'ক্লিপবোর্ড থেকে পেস্ট করুন', 'Colar da área de transferência', 'Tempel dari papan klip', 'کلپ بورڈ سے پیسٹ کریں'],
+  'Копировать выражение': ['Copy expression', '复制表达式', 'व्यंजक कॉपी करें', 'Copiar expresión', 'نسخ التعبير', 'Copier l’expression', 'রাশি কপি করুন', 'Copiar expressão', 'Salin ekspresi', 'اظہار کاپی کریں'],
+  'Вставить результат': ['Insert result', '插入结果', 'परिणाम डालें', 'Insertar resultado', 'إدراج النتيجة', 'Insérer le résultat', 'ফলাফল বসান', 'Inserir resultado', 'Sisipkan hasil', 'نتیجہ شامل کریں'],
+  'Копировать результат': ['Copy result', '复制结果', 'परिणाम कॉपी करें', 'Copiar resultado', 'نسخ النتيجة', 'Copier le résultat', 'ফলাফল কপি করুন', 'Copiar resultado', 'Salin hasil', 'نتیجہ کاپی کریں'],
   'Вставить': ['Paste', '粘贴', 'पेस्ट करें', 'Pegar', 'لصق', 'Coller', 'পেস্ট করুন', 'Colar', 'Tempel', 'پیسٹ کریں'],
   'Вставлено: {0}': ['Inserted: {0}', '已插入：{0}', 'डाला गया: {0}', 'Insertado: {0}', 'تم الإدراج: {0}', 'Inséré : {0}', 'যোগ করা হয়েছে: {0}', 'Inserido: {0}', 'Disisipkan: {0}', 'شامل کیا گیا: {0}'],
   'Вставлено в поле: {0}': ['Inserted into the field: {0}', '已插入字段：{0}', 'फ़ील्ड में डाला गया: {0}', 'Insertado en el campo: {0}', 'تم الإدراج في الحقل: {0}', 'Inséré dans le champ : {0}', 'ঘরে যোগ করা হয়েছে: {0}', 'Inserido no campo: {0}', 'Disisipkan ke kolom: {0}', 'خانے میں شامل کیا گیا: {0}'],
@@ -838,7 +841,7 @@ function tokenize(s) {
   var t = [], i = 0, n = s.length;
   while (i < n) {
     var c = s[i];
-    if ('    \n\t'.indexOf(c) >= 0) { i++; continue; }
+    if ('     \n\t'.indexOf(c) >= 0) { i++; continue; }
     if (/[0-9.]/.test(c)) {
       var j = i; while (j < n && /[0-9.]/.test(s[j])) j++;
       var num = s.slice(i, j);
@@ -858,8 +861,8 @@ function tokenize(s) {
     if (c === '^') { t.push({ k: 'op', v: '^' }); i++; continue; }
     if (c === '²' || c === '³') { t.push({ k: 'op', v: '^' }); t.push({ k: 'num', v: c === '²' ? 2 : 3 }); i++; continue; }
     if (c === '!' || c === '%' || c === '°') { t.push({ k: 'post', v: c }); i++; continue; }
-    if (c === '(' || c === '[') { t.push({ k: '(' }); i++; continue; }
-    if (c === ')' || c === ']') { t.push({ k: ')' }); i++; continue; }
+    if (c === '(' || c === '[' || c === '{') { t.push({ k: '(' }); i++; continue; }
+    if (c === ')' || c === ']' || c === '}') { t.push({ k: ')' }); i++; continue; }
     if (c === ',' || c === ';') { t.push({ k: ',' }); i++; continue; }
     if (c === '√') { t.push({ k: 'sqrt' }); i++; continue; }
     if (c === '∛') { t.push({ k: 'cbrt' }); i++; continue; }
@@ -954,21 +957,35 @@ function parse(text, userFns) {
   return node;
 }
 
+// Γ(z) as tgamma: Lanczos g = 607/128, 15 terms (≈ 15 digits); below ½ by the reflection formula
+var LG = 607 / 128, LC = [0.99999999999999709182, 57.156235665862923517, -59.597960355475491248, 14.136097974741747174,
+  -0.49191381609762019978, 0.33994649984811888699e-4, 0.46523628927048575665e-4, -0.98374475304879564677e-4,
+  0.15808870322491248884e-3, -0.21026444172410488319e-3, 0.21743961811521264320e-3, -0.16431810653676389022e-3,
+  0.84418223983852743293e-4, -0.26190838401581408670e-4, 0.36899182659531622704e-5];
+function gamma(z) {
+  if (z < 0.5) {   // sin(πz) = (−1)ⁿ·sin(π(z − n)): exact next to the whole numbers too
+    var n = Math.round(z), sp = Math.sin(Math.PI * (z - n));
+    if (n % 2) sp = -sp;
+    return Math.PI / (sp * gamma(1 - z));
+  }
+  if (z > 171.7) return Infinity;
+  z -= 1;
+  var a = LC[0]; for (var k = 1; k < 15; k++) a += LC[k] / (z + k);
+  var t = z + LG + 0.5, p = Math.pow(t, (z + 0.5) / 2);   // in two halves: no overflow before the end
+  return Math.sqrt(2 * Math.PI) * p * Math.exp(-t) * p * a;
+}
+// x! — whole numbers up to 170 exactly, the rest as Γ(x + 1) (Calculator.factorial)
 function fact(x) {
   if (x < 0 && x === Math.round(x)) throw new CalcError('Факториал отрицательного');
   if (x === Math.round(x) && x <= 170) { var r = 1; for (var i = 2; i <= x; i++) r *= i; return r; }
-  if (x > 170) return Infinity;
-  // Lanczos gamma(x+1)
-  var g = 7, cf = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313,
-    -176.61503916999185, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
-  var z = x; var a = cf[0], tt = z + g + 0.5;
-  for (var k = 1; k < g + 2; k++) a += cf[k] / (z + k);
-  return Math.sqrt(2 * Math.PI) * Math.pow(tt, z + 0.5) * Math.exp(-tt) * a;
+  return gamma(x + 1);
 }
+// rounding half away from zero, as Swift .rounded(): 2.5 → 3, −2.5 → −3
+function rnd(x) { return x < 0 ? -Math.round(-x) : Math.round(x); }
 function pw(a, b) {
   if (a < 0 && b !== Math.round(b)) {
     var inv = 1 / b;
-    if (Math.abs(inv - Math.round(inv)) < 1e-9 && Math.round(inv) % 2 !== 0) return -Math.pow(-a, b);
+    if (Math.abs(inv) < 1e15 && Math.abs(inv - Math.round(inv)) < 1e-9 && Math.round(inv) % 2 !== 0) return -Math.pow(-a, b);
   }
   return Math.pow(a, b);
 }
@@ -984,6 +1001,7 @@ function ev(nd, ctx) {
       if (nm === 'e') return Math.E;
       if (lo === 'phi') return (1 + Math.sqrt(5)) / 2;
       if (lo === 'ans') { if (ctx.ans == null) throw new CalcError('ans не определён'); return ctx.ans; }
+      if (lo === 'inf') return Infinity;
       throw new CalcError('Неизвестно: {0}', [nm]);
     }
     case 'neg': return -ev(nd.a, ctx);
@@ -1028,8 +1046,9 @@ function lazy(name, a, ctx) {
   var v = a[1].n, body = a[0];
   function f(x) { var c = Object.assign({}, ctx, { vars: Object.assign({}, ctx.vars) }); c.vars[v] = x; return ev(body, c); }
   if (name === 'sum' || name === 'prod') {
-    if (a.length !== 4) throw new CalcError('(выражение, i, от, до)');
-    var lo = Math.round(ev(a[2], ctx)), hi = Math.round(ev(a[3], ctx));
+    if (a.length !== 4) throw new CalcError((name === 'sum' ? '∑' : '∏') + T('(выражение, i, от, до)'));
+    var lo = rnd(ev(a[2], ctx)), hi = rnd(ev(a[3], ctx));
+    if (!isFinite(lo) || !isFinite(hi)) throw new CalcError('Не определено');
     if (hi - lo > 1e6) throw new CalcError('Слишком много шагов');
     var acc = name === 'sum' ? 0 : 1;
     for (var k = lo; k <= hi; k++) { var y = f(k); acc = name === 'sum' ? acc + y : acc * y; }
@@ -1079,7 +1098,7 @@ function fn(n, a, ctx) {
     case 'abs': need(1); return Math.abs(a[0]);
     case 'floor': need(1); return Math.floor(a[0]);
     case 'ceil': need(1); return Math.ceil(a[0]);
-    case 'round': need(1); return Math.round(a[0]);
+    case 'round': need(1); return rnd(a[0]);
     case 'int': need(1); return Math.trunc(a[0]);
     case 'frac': need(1); return a[0] - Math.trunc(a[0]);
     case 'sign': need(1); return Math.sign(a[0]);
@@ -1088,16 +1107,16 @@ function fn(n, a, ctx) {
     case 'min': if (!a.length) throw new CalcError('{0}: нет аргументов', ['min']); return Math.min.apply(null, a);
     case 'max': if (!a.length) throw new CalcError('{0}: нет аргументов', ['max']); return Math.max.apply(null, a);
     case 'mod': need(2); if (a[1] === 0) throw new CalcError('Деление на ноль'); var r = a[0] % a[1]; return r < 0 ? r + Math.abs(a[1]) : r;
-    case 'ncr': need(2); return Math.round(fact(a[0]) / (fact(a[1]) * fact(a[0] - a[1])));
-    case 'npr': need(2); return Math.round(fact(a[0]) / fact(a[0] - a[1]));
-    case 'gcd': need(2); var x = Math.abs(Math.round(a[0])), y = Math.abs(Math.round(a[1])); while (y) { var tq = y; y = x % y; x = tq; } return x;
+    case 'ncr': need(2); return rnd(fact(a[0]) / (fact(a[1]) * fact(a[0] - a[1])));
+    case 'npr': need(2); return rnd(fact(a[0]) / fact(a[0] - a[1]));
+    case 'gcd': need(2); var x = Math.abs(rnd(a[0])), y = Math.abs(rnd(a[1])); while (y) { var tq = y; y = x % y; x = tq; } return x;
     case 'lcm': need(2); var g = fn('gcd', a, ctx); return g === 0 ? 0 : Math.abs(a[0] * a[1]) / g;
   }
   throw new CalcError('Неизвестная функция {0}', [n]);
 }
 
 /* smart paste: "99 999,01" → 99999.01, "$43,100.5" → 43100.5, "1,500" → 1500 */
-var GROUP = /[ \u00a0\u2009\u202f'’]/;
+var GROUP = /[ \u00a0\u2009\u2005\u202f'’]/;
 function normalizePaste(text) {
   var t = text.trim(), chars = Array.from(t);
   var first = chars.findIndex(function (c) { return /[0-9]/.test(c); });
@@ -1152,13 +1171,18 @@ function trimZeros(m) { return m.indexOf('.') >= 0 ? m.replace(/0+$/, '').replac
 // rounds to dp digits after the point, never past the ~15 significant digits a double holds
 function fixedDp(x, dp) {
   var a = Math.abs(x), ip = a > 0 ? Math.floor(Math.log10(a)) + 1 : 1;
-  return trimZeros(x.toFixed(Math.max(0, Math.min(dp, 15 - ip, 100))));
+  var d = Math.max(0, Math.min(dp, 15 - ip, 100)), m = Math.pow(10, d);
+  var r = rnd(x * m) / m;          // as the app: (x·10ᵈ).rounded(.toNearestOrAwayFromZero) / 10ᵈ — 362.885 → 362.89
+  if (r === 0) r = 0;              // no "-0"
+  return trimZeros(r.toFixed(d));
 }
 function expForm(v, dp, eng) {
   var e = Math.floor(Math.log10(Math.abs(v)));
   if (eng) e = Math.floor(e / 3) * 3;
-  var ms = fixedDp(v / Math.pow(10, e), dp);
-  if (Math.abs(Number(ms)) >= (eng ? 1000 : 10)) { e += eng ? 3 : 1; ms = fixedDp(v / Math.pow(10, e), dp); }
+  // 10^e underflows to 0 for e ≤ −324: divide in two steps
+  function mant(p) { return p < -300 ? v * 1e300 / Math.pow(10, p + 300) : v / Math.pow(10, p); }
+  var ms = fixedDp(mant(e), dp);
+  if (Math.abs(Number(ms)) >= (eng ? 1000 : 10)) { e += eng ? 3 : 1; ms = fixedDp(mant(e), dp); }
   return ms + 'E' + e;
 }
 function fmtNum(v, dp, notation, sep) {
@@ -1204,7 +1228,10 @@ try {
   var saved = JSON.parse(localStorage.getItem(STORE) || 'null');
   if (saved && Array.isArray(saved.vars)) Object.assign(st, saved);
 } catch (e) {}
-st.cur = Math.min(st.cur, st.expr.length);
+// the caret at the end, a digit continues the number (ExprEditor(text:)); unfinished rows are not kept
+st.cur = st.expr.length; st.just = false;
+st.vars = st.vars.filter(function (v) { return !v.isNew; });
+if (Array.isArray(st.fns)) st.fns = st.fns.filter(function (f) { return !(f.isNew && !f.body); });
 if (!Array.isArray(st.pins)) st.pins = ['v:1', 'f:101'];
 if (!Array.isArray(st.fns)) st.fns = [
   { id: 101, name: 'с_ндс', params: 'x', body: 'x×(1+ставка%)' },
@@ -1215,7 +1242,6 @@ if (!Array.isArray(st.fns)) st.fns = [
 st.vars.forEach(function (v) { if (v.note === 'аргумент графиков' || /^пример/.test(v.note || '')) v.note = ''; });
 st.fns.forEach(function (f) { delete f.ex; });
 st.vars.forEach(function (v) { if (v.cur) { v.formula = v.cur + (v.tail || ''); delete v.cur; delete v.tail; } });
-st.fns.forEach(function (f) { if (f.body) f.params = deriveParams(f, true); });
 st.history.forEach(function (h) { if (h.recent == null) h.recent = true; });
 st.set = Object.assign({ mode: 'engineer', notation: 'dec', precision: 10, sep: '\u2009', lang: 'ru', theme: 'black', vibrate: true, contrast: false, awake: false, awakeHours: 0, onFly: true, bg: 0, bgInt: 40 }, st.set || {});
 if (!LANGS.some(function (l) { return l[0] === st.set.lang; })) st.set.lang = 'ru';
@@ -1353,6 +1379,7 @@ function insert(text) {
   if (text === '()') shift = 1;
   else if (text.length > 2 && text.slice(-2) === '()') shift = text.length - 1;   // "ндс()" → cursor inside
   if (text === '^2') { text = '²'; shift = 1; }
+  if (text === '^3') { text = '³'; shift = 1; }
   // two names or a name and a number next to each other get an explicit ×
   var prevC = st.expr[st.cur - 1], nextC = st.expr[st.cur];
   var startsName = LETTER.test(text[0]);
@@ -1429,12 +1456,13 @@ function equals() {
       });
     }
     st.ans = v;
+    haptic([8, 40, 8]);
     edit(function () { st.expr = shownPlain(v); st.cur = st.expr.length; });
     st.just = true;
   } catch (e) {
     renderCalc();
     var pv = document.getElementById('preview'); pv.textContent = e.message || T('Ошибка'); pv.classList.add('err'); fitPreview();
-    if (st.set.vibrate && navigator.vibrate) try { navigator.vibrate([10, 40, 10]); } catch (er) {}
+    haptic([10, 40, 10]);
     return;
   }
   renderCalc(); save();
@@ -1446,10 +1474,10 @@ function run(cmd) {
     case 'clear': edit(function () { st.expr = ''; st.cur = 0; st.just = false; }); break;
     case 'ce': edit(clearEntry); break;
     case 'bs': edit(backspace); break;
-    case 'left': moveLeft(); renderCalc(); break;
-    case 'right': moveRight(); renderCalc(); break;
-    case 'home': st.cur = 0; st.just = false; renderCalc(); break;
-    case 'end': st.cur = st.expr.length; st.just = false; renderCalc(); break;
+    case 'left': moveLeft(); renderCaret(); return;     // the caret only: the answer is not counted again
+    case 'right': moveRight(); renderCaret(); return;
+    case 'home': st.cur = 0; st.just = false; renderCaret(); return;
+    case 'end': st.cur = st.expr.length; st.just = false; renderCaret(); return;
     case 'mr': if (st.memory != null) { var m = shownPlain(st.memory); edit(function () { insert(m); }); } else toast(T('Память пуста')); break;
     case 'm+': { var a = currentValue(); if (a != null) { st.memory = (st.memory || 0) + a; toast('M = ' + fmt(st.memory, true)); } break; }
     case 'm-': { var b = currentValue(); if (b != null) { st.memory = (st.memory || 0) - b; toast('M = ' + fmt(st.memory, true)); } break; }
@@ -1837,16 +1865,21 @@ function fitPreview() {
   pv.style.fontSize = size + 'px';
   while (pv.scrollWidth > pv.clientWidth + 1 && size > base * 0.35) { size -= 1; pv.style.fontSize = size + 'px'; }
 }
+var keepPreview = false;
+function renderCaret() { keepPreview = true; renderCalc(); }
 function renderCalc() {
   document.getElementById('calc').classList.toggle('eng-on', st.eng);
   document.getElementById('engGrid').hidden = !st.eng;
   renderExpr();
   var pv = document.getElementById('preview');
-  pv.classList.remove('err');
-  if (!st.expr.trim() || (!st.set.onFly && !st.just)) pv.textContent = '';
+  if (keepPreview) keepPreview = false;
   else {
-    try { pv.textContent = fmt(evaluate(st.expr, ctx()), true); }
-    catch (e) { pv.textContent = e.message || T('Ошибка'); pv.classList.add('err'); }
+    pv.classList.remove('err');
+    if (!st.expr.trim() || (!st.set.onFly && !st.just)) pv.textContent = '';
+    else {
+      try { pv.textContent = fmt(evaluate(st.expr, ctx()), true); }
+      catch (e) { pv.textContent = e.message || T('Ошибка'); pv.classList.add('err'); }
+    }
   }
   var rb = document.getElementById('radBadge'); rb.hidden = st.angle === 'deg'; rb.textContent = { rad: 'RAD', grad: 'GRAD', turn: 'TURNS' }[st.angle] || '';
   renderPins();
@@ -1894,7 +1927,7 @@ function attachLongPress(area, type, item) {
       t = null; area.classList.remove('lp');
       if (!item.name) { toast(T('Сначала задай имя')); return; }
       togglePin(type, item.id);
-      if (navigator.vibrate) try { navigator.vibrate(20); } catch (er) {}
+      haptic(20);
       toast(T(isPinned(type, item.id) ? 'Закреплено вверху калькулятора' : 'Откреплено'));
     }, 500);
   });
@@ -1976,7 +2009,7 @@ function makeStrip(box, o) {
       S.timer = setTimeout(function () {
         if (!S || S.mode !== 'press') return;
         S.mode = 'drag'; chip.classList.add('lift');
-        if (navigator.vibrate) try { navigator.vibrate(15); } catch (er) {}
+        haptic(15);
         autoScroll();
       }, 380);
     }
@@ -2122,7 +2155,12 @@ function fnError(f) {
 
 /* history sheet */
 var histSaved = false;
-function openHist() { document.getElementById('histSheet').hidden = false; document.getElementById('histScrim').hidden = false; renderHist(); }
+// a shown number as it is typed: no separators, ASCII minus (HistoryView.plain)
+function plainNum(s) {
+  if (OUT.sep) s = s.split(OUT.sep).join('');
+  return s.replace(/[\u2009\u2005]/g, '').replace(/−/g, '-');
+}
+function openHist() { histSaved = false; document.getElementById('histSheet').hidden = false; document.getElementById('histScrim').hidden = false; renderHist(); }
 function closeHist() { document.getElementById('histSheet').hidden = true; document.getElementById('histScrim').hidden = true; }
 function renderHist() {
   document.getElementById('hRecent').setAttribute('aria-selected', String(!histSaved));
@@ -2170,9 +2208,9 @@ function renderHist() {
     attachSwipe(li, slide, remove);
     longPressMenu(b, li, function () {
       return [
-        { t: T('Вставить результат'), icon: '', run: function () { var r = h.r.replace(/[\u2009\u2005' ]/g, '').replace(/−/g, '-'); edit(function () { st.expr = r; st.cur = r.length; st.just = false; }); closeHist(); } },
+        { t: T('Вставить результат'), icon: '', run: function () { var r = plainNum(h.r); edit(function () { st.expr = r; st.cur = r.length; st.just = false; }); closeHist(); } },
         { t: T('Копировать выражение'), icon: '', run: function () { copyText(h.e); } },
-        { t: T('Копировать результат'), icon: '', run: function () { copyText(h.r.replace(/[\u2009\u2005' ]/g, '').replace(/−/g, '-')); } }
+        { t: T('Копировать результат'), icon: '', run: function () { copyText(plainNum(h.r)); } }
       ];
     });
   });
@@ -2289,7 +2327,11 @@ function editPart(t, id, part) {
 }
 function leave(s) {
   if (s.part === 'name') return s.t === 'v' ? renameVariable(s.id, DRAFT.name) : renameFunction(s.id, DRAFT.name);
-  if (s.part === 'params') { if (!setParams(s.id, DRAFT.params)) return false; TOUCHED = true; }
+  if (s.part === 'params') {
+    var f0 = itemOf('f', s.id), before = f0 ? f0.params : null;
+    if (!setParams(s.id, DRAFT.params)) return false;
+    var f1 = itemOf('f', s.id); if (f1 && f1.params !== before) TOUCHED = true;
+  }
   return true;
 }
 // the drafts of the part being opened; both fields of a function's first line show what is saved now
@@ -2398,18 +2440,22 @@ function nameProblem(n, vid, fid) {
   return null;
 }
 // a name in a text: a variable (call = false) everywhere, before a bracket too ("x(2)" is a product); a function only where called
-function renameIdent(text, old, nw, call) {
+function renameIdent(text, old, nw, call, caret) {
+  renameIdent.caret = caret;
   if (!text) return text;
-  var out = '', i = 0;
+  var out = '', i = 0, shift = 0;
   while (i < text.length) {
     var c = text[i];
     if (LETTER.test(c) && !SYM[c]) {
       var j = i; while (j < text.length && isIdChar(text[j]) && !SYM[text[j]]) j++;
       var name = text.slice(i, j), isCall = text[j] === '(';
-      out += (name === old && (isCall || !call)) ? nw : name;
+      if (name === old && (isCall || !call)) { out += nw; if (caret >= j) shift += nw.length - old.length; }
+      else out += name;
       i = j;
     } else { out += c; i++; }
   }
+  // the caret keeps its place in the text: only the names that end before it move it (CalcModel.renamed)
+  if (caret != null) renameIdent.caret = Math.max(0, Math.min(out.length, caret + shift));
   return out;
 }
 // the new name is already used next to the old one (an argument, the running variable of ∑ …): renaming would merge them
@@ -2421,8 +2467,8 @@ function renameMerges(old, n) {
 }
 // a new name reaches the expression, the formulas of variables, the formulas and arguments of functions
 function renameEverywhere(old, nw, call) {
-  var e = renameIdent(st.expr, old, nw, call);
-  if (e !== st.expr) { st.cur = Math.max(0, Math.min(e.length, st.cur + e.length - st.expr.length)); st.expr = e; }
+  var e = renameIdent(st.expr, old, nw, call, st.cur);
+  if (e !== st.expr) { st.cur = renameIdent.caret; st.expr = e; st.just = false; }
   st.vars.forEach(function (v) { if (v.formula) v.formula = renameIdent(v.formula, old, nw, call); });
   st.fns.forEach(function (f) {
     f.body = renameIdent(f.body, old, nw, call);
@@ -2484,7 +2530,7 @@ function fnHint(text) {
 }
 function pinWithToast(type, id) {
   togglePin(type, id);
-  if (navigator.vibrate && st.set.vibrate) try { navigator.vibrate(20); } catch (e) {}
+  haptic(20);
   toast(T(isPinned(type, id) ? 'Закреплено вверху калькулятора' : 'Откреплено'));
 }
 
@@ -2937,7 +2983,8 @@ function pasteFromClipboard() {
   clipRead(function (t) {
     if (t == null) { toast(T('Браузер не даёт читать буфер — нажми Ctrl+V')); return; }
     if (!t) return;
-    var p = preparePaste(t); edit(function () { insert(p); }); toast(T('Вставлено: {0}', [p]));
+    var p = preparePaste(t); if (!p) return;
+    edit(function () { insert(p); }); toast(T('Вставлено: {0}', [p]));
   });
 }
 
@@ -2968,7 +3015,7 @@ function showMenu(anchor, items) {
   m.style.left = left + 'px'; m.style.top = top + 'px';
   sc.addEventListener('click', closeMenu);
   cmenuOpen = true;
-  if (st.set.vibrate && navigator.vibrate) try { navigator.vibrate(15); } catch (e) {}
+  haptic(15);
 }
 function longPressMenu(target, holder, itemsFn) {
   var t = null, sx = 0, sy = 0;
@@ -3000,6 +3047,11 @@ document.addEventListener('keydown', function () { if (st.set.awake) awakeTick()
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'visible' && st.set.awake) { wakeLock = null; awakeTick(); }
 });
+// leaving the app (the home screen, another tab, closing): the row being edited is finished and all is saved, as the
+// app does when it goes to the background
+function goingAway() { if (SES) { endEditing(); renderLists(); } save(); }
+document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') goingAway(); });
+window.addEventListener('pagehide', goingAway);
 // background tint (moved here from the converter): mixes a colour into the screens' background, same for the converter
 var BGPAL = ['', '#6B5B95', '#B19CD9', '#FFB5A7', '#A47864', '#9CAF88', '#EBC474', '#E07A5F', '#81B7D2', '#D88C9A'];
 var BGBASE = { black: '#000000', graphite: '#1a1a1c', light: '#f2f2f7' };
@@ -3022,7 +3074,8 @@ function applyBg() {
 // the converter reads language, separator, theme, background, vibration and contrast from here
 window.CalcApp = { T: T, set: function () { return st.set; }, locale: langLocale, clipWrite: function (t) { clipWrite(t); },
   clipRead: function (cb) { clipRead(cb); }, pasteNumber: function (t) { return pasteNumber(t); }, fmt: function (v) { return fmt(v, true); },
-  recalc: function () { renderCalc(); if (TAB === 'vars' || TAB === 'fns') renderLists(); } };
+  recalc: function () { renderCalc(); if (TAB === 'vars' || TAB === 'fns') renderLists(); },
+  haptic: function (p) { haptic(p); } };
 function applySettings() {
   var o = st.set, root = document.documentElement;
   if (o.notation === 'sci') o.notation = 'eng';
@@ -3042,6 +3095,8 @@ function applyLang() {
   document.documentElement.lang = LANG;
   Array.prototype.forEach.call(document.querySelectorAll('[data-t]'), function (el) { el.textContent = T(el.dataset.t); });
   Array.prototype.forEach.call(document.querySelectorAll('[data-tp]'), function (el) { el.placeholder = T(el.dataset.tp); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-ta]'), function (el) { el.setAttribute('aria-label', T(el.dataset.ta)); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-tt]'), function (el) { el.title = T(el.dataset.tt); });
   buildAllGrids();
   renderTabs();
 }
@@ -3119,9 +3174,11 @@ document.getElementById('sepNone').addEventListener('click', function () { st.se
     var chars = Array.from(si.value), c = chars[chars.length - 1];
     if (!c) return;                                            // emptied: decided when the field is left
     if (/[\p{L}0-9.,+\-−×÷*\/()%^]/u.test(c)) { toast(T('Буквы, цифры, точка, запятая и знаки действий не подходят')); si.value = st.set.sep ? sepShown(st.set.sep) : ''; return; }
-    st.set.sep = (c === ' ' || c === '␣') ? ' ' : c;
+    var sep = (c === ' ' || c === '␣') ? ' ' : c, changed = st.set.sep !== sep;
+    st.set.sep = sep;
     si.value = sepShown(st.set.sep);
     settingsChanged();
+    if (changed) si.blur();
   });
   si.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); si.blur(); } });
   si.addEventListener('blur', function () { if (!si.value) st.set.sep = ''; settingsChanged(); });
@@ -3137,7 +3194,21 @@ document.getElementById('sepNone').addEventListener('click', function () { st.se
     hi.value = st.set.awakeHours; settingsChanged();
   });
 })();
-function buzz() { if (st.set.vibrate && navigator.vibrate) try { navigator.vibrate(12); } catch (e) {} }
+// vibration by the «Вибрация» setting: navigator.vibrate where the browser has it (Android); on the iPhone, where
+// pages get none, the tick of the system switch (iOS 18+: a label of <input type=checkbox switch> clicked from a touch)
+var IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function haptic(p) {
+  if (!st.set.vibrate) return;
+  try {
+    if (navigator.vibrate) { navigator.vibrate(p); return; }
+    if (!IOS) return;
+    var l = document.createElement('label'), i = document.createElement('input');
+    l.setAttribute('aria-hidden', 'true'); l.style.display = 'none';
+    i.type = 'checkbox'; i.setAttribute('switch', ''); i.tabIndex = -1;
+    l.appendChild(i); document.head.appendChild(l); l.click(); l.remove();
+  } catch (e) {}
+}
+function buzz() { haptic(12); }
 
 /* bottom tab bar: Калькулятор · Переменные · Функции · Конвертер · Настройки */
 var TABS = [
@@ -3184,6 +3255,7 @@ document.addEventListener('click', function (e) {
   flashPhone(t);
 });
 function openSettings() {
+  hideXPaste();
   var sh = document.getElementById('setSheet');
   document.getElementById('histSheet').hidden = true; renderSettings();
   sh.style.transform = ''; sh.classList.add('off'); sh.hidden = false; void sh.offsetWidth; sh.classList.remove('off');
@@ -3195,7 +3267,7 @@ function closeSettings() {
 }
 document.getElementById('tbSet').addEventListener('click', openSettings);
 document.getElementById('setClose').addEventListener('click', closeSettings);
-document.getElementById('engBtn').addEventListener('click', function () { st.eng = !st.eng; renderCalc(); save(); });
+document.getElementById('engBtn').addEventListener('click', function () { buzz(); hideXPaste(); st.eng = !st.eng; renderCalc(); save(); });
 /* ---- the caret anywhere in the expression, as in text on iPhone (ExprLines.index / ExprEditor.place in the app) ----
    A tap puts the caret at the nearest place between the characters (into a name it does not go: before or after it,
    whichever is nearer). Hold (0.4 s): a loupe over the finger shows the caret's line 1.25 times bigger, the caret
@@ -3290,7 +3362,7 @@ function hideXPaste() { var b = document.getElementById('xpaste'); if (b) b.hidd
 (function () {
   var ex = document.getElementById('expr'), down = null, timer = null, holding = false;
   function local(e) { var r = ex.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
-  function follow(p) { placeCaret(exprIndexAt(p.x, p.y)); renderCalc(); showLoupe(p); }
+  function follow(p) { placeCaret(exprIndexAt(p.x, p.y)); renderCaret(); showLoupe(p); }
   ex.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   ex.addEventListener('pointerdown', function (e) {
     if (e.button) return;
@@ -3301,7 +3373,7 @@ function hideXPaste() { var b = document.getElementById('xpaste'); if (b) b.hidd
       timer = null;
       if (!down || down.moved) return;
       holding = true; hideXPaste();
-      if (st.set.vibrate && navigator.vibrate) try { navigator.vibrate(10); } catch (er) {}
+      haptic(10);
       follow(down.last || down.p);
     }, 400);
   });
@@ -3318,11 +3390,11 @@ function hideXPaste() { var b = document.getElementById('xpaste'); if (b) b.hidd
     var d = down; down = null; clearTimeout(timer); timer = null;
     if (holding) {   // let go: the caret where the finger left, «Вставить» over it
       holding = false; hideLoupe();
-      if (!cancelled) { var lp = local(e); placeCaret(exprIndexAt(lp.x, lp.y)); renderCalc(); showXPaste(); }
+      if (!cancelled) { var lp = local(e); placeCaret(exprIndexAt(lp.x, lp.y)); renderCaret(); showXPaste(); }
       return;
     }
     if (cancelled) return;
-    if (!d.moved) { hideXPaste(); placeCaret(exprIndexAt(d.p.x, d.p.y)); renderCalc(); return; }   // a tap
+    if (!d.moved) { hideXPaste(); placeCaret(exprIndexAt(d.p.x, d.p.y)); renderCaret(); return; }   // a tap
     var dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (Math.abs(dy) < 40 && dx < -60) run('bs');
     else if (Math.abs(dy) < 40 && dx > 60) run('clear');
@@ -3354,12 +3426,15 @@ document.addEventListener('keydown', function (e) {
 });
 
 document.addEventListener('paste', function (e) {
-  if (e.target.closest && e.target.closest('input')) return;
+  if (e.target.closest && e.target.closest('input, textarea')) return;
   var t = (e.clipboardData || window.clipboardData).getData('text');
   if (!t) return;
   e.preventDefault();
-  if (window.ConvApp && window.ConvApp.editing()) { window.ConvApp.pasteText(t); return; }
+  if (TAB === 'conv') { if (window.ConvApp && window.ConvApp.editing()) window.ConvApp.pasteText(t); return; }
   var p = preparePaste(t);
+  if (!p) return;
+  if (TAB === 'vars' || TAB === 'fns') { if (FLD) fieldInsertText(p); return; }
+  if (!document.getElementById('setSheet').hidden || !document.getElementById('histSheet').hidden) return;
   edit(function () { insert(p); });
   toast(T('Вставлено: {0}', [p]));
 });
@@ -3386,6 +3461,13 @@ renderFns();
 renderCalc();
 renderTabs();
 showTab(TAB);
+// the arguments of every function follow its formula (CalcModel.load), nothing typed by hand is dropped — once the
+// currency codes are known (the converter's script below brings them), so a code in a formula is no argument
+function deriveAll() {
+  st.fns.forEach(function (f) { if (f.body) f.params = deriveParams(f, false); });
+  renderVars(); renderFns(); renderCalc();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', deriveAll); else setTimeout(deriveAll, 0);
 })();
 </script>
 
@@ -3441,14 +3523,15 @@ svg { display: block; flex-shrink: 0; }
 .k:focus-visible, .back:focus-visible, .seg button:focus-visible, .pbox:focus-visible, .tbtn:focus-visible, .prow:focus-visible,
 .go:focus-visible, .dic:focus-visible, .dbtn:focus-visible, .dnew:focus-visible, .clr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* desks: pages of a native snapping scroller; one desk = VStack(spacing 8), padding 4 / 16 / 16 (280 under the keypad) */
+/* desks: pages of a native snapping scroller (a finger swipes them natively: a desk scrolls up and down and lets the
+   sideways swipe through to the pages); one desk = VStack(spacing 8), padding 4 / 16 / 16 (280 under the keypad) */
 .vp { flex: 1 1 auto; min-height: 0; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
 .vp::-webkit-scrollbar { display: none; }
 .vp.lock { overflow-x: hidden; }
 .track { display: flex; height: 100%; }
 .body {
   flex: 0 0 100%; height: 100%; box-sizing: border-box; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 8px;
-  scroll-snap-align: start; scroll-snap-stop: always; touch-action: pan-y; scrollbar-width: none;
+  scroll-snap-align: start; scroll-snap-stop: always; touch-action: pan-x pan-y; scrollbar-width: none;
 }
 .body::-webkit-scrollbar { display: none; }
 .body.kpad { padding-bottom: 280px; }
@@ -3893,7 +3976,7 @@ svg { display: block; flex-shrink: 0; }
 
   var S = {
     desks: [
-      { name: 'Путешествие', codes: ['USD', 'EUR', 'JPY', 'CNY', 'GEL', 'AED', 'BYN', 'TRY', 'KZT'], base: 'USD', amount: '10000', feeOn: true, fee: '2', mode: 'add' },
+      { name: 'Путешествие', codes: ['USD', 'EUR'], base: 'USD', amount: '100', feeOn: true, fee: '2', mode: 'add' },
       { name: 'Работа', codes: ['USD', 'EUR'], base: 'EUR', amount: '500', feeOn: false, fee: '1', mode: 'sub' }
     ],
     presets: ['0', '1', '2', '5'],
@@ -3906,34 +3989,36 @@ svg { display: block; flex-shrink: 0; }
   (function () {
     var o = null; try { o = JSON.parse(localStorage.getItem(CKEY) || 'null'); } catch (e) {}
     if (!o || !Array.isArray(o.desks) || !o.desks.length) return;
-    var desks = o.desks.map(function (d) {
+    // as ConverterModel.load: every desk comes back — an empty one too — with its pinned currency
+    S.desks = o.desks.map(function (d) {
       var codes = (Array.isArray(d.codes) ? d.codes : []).filter(function (c, i, a) { return RATES[c] && a.indexOf(c) === i; });
-      return { name: String(d.name || ''), codes: codes, base: codes.indexOf(d.base) >= 0 ? d.base : (codes[0] || 'USD'),
-        amount: String(d.amount == null ? '' : d.amount), feeOn: !!d.feeOn, fee: String(d.fee == null ? '0' : d.fee), mode: d.mode === 'sub' ? 'sub' : 'add' };
-    }).filter(function (d) { return d.codes.length; });
-    if (!desks.length) return;
-    S.desks = desks;
-    if (Array.isArray(o.presets) && o.presets.length) S.presets = o.presets.map(String);
+      return { name: String(d.name || ''), codes: codes, base: codes.indexOf(d.base) >= 0 ? d.base : (codes[0] || ''),
+        amount: String(d.amount == null ? '' : d.amount), feeOn: !!d.feeOn, fee: String(d.fee == null ? '0' : d.fee), mode: d.mode === 'sub' ? 'sub' : 'add',
+        pin: codes.indexOf(d.pin) >= 0 ? d.pin : null };
+    });
+    if (Array.isArray(o.presets) && o.presets.length === 4) S.presets = o.presets.map(String);
     if (typeof o.feeShow === 'boolean') S.feeShow = o.feeShow;
     if (typeof o.autoTop === 'boolean') S.autoTop = o.autoTop;
-    S.idx = Math.max(0, Math.min(desks.length - 1, o.idx | 0));
+    S.idx = Math.max(0, Math.min(S.desks.length - 1, o.idx | 0));
   })();
   var convSaveT = null;
-  function saveConv() {
-    clearTimeout(convSaveT);
-    convSaveT = setTimeout(function () {
-      try {
-        localStorage.setItem(CKEY, JSON.stringify({ desks: S.desks, presets: S.presets, feeShow: S.feeShow, autoTop: S.autoTop, idx: S.idx }));
-      } catch (e) {}
-    }, 300);
+  function saveConvNow() {
+    clearTimeout(convSaveT); convSaveT = null;
+    try {
+      localStorage.setItem(CKEY, JSON.stringify({ desks: S.desks, presets: S.presets, feeShow: S.feeShow, autoTop: S.autoTop, idx: S.idx }));
+    } catch (e) {}
   }
+  function saveConv() { clearTimeout(convSaveT); convSaveT = setTimeout(saveConvNow, 300); }
+  // leaving the app: saved at once
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveConvNow(); });
+  window.addEventListener('pagehide', saveConvNow);
 
   /* ---- link to the calculator ---- */
   var CA = window.CalcApp;
   function CS() { return CA ? CA.set() : { theme: 'black', sep: '\u2009', vibrate: false, contrast: false, bg: 0, bgInt: 40 }; }
   function T(k, a) { if (CA) return CA.T(k, a); return a ? k.replace(/\{(\d)\}/g, function (m, i) { return a[+i]; }) : k; }
   function locale() { return CA ? CA.locale() : 'ru-RU'; }
-  function buzz() { if (CS().vibrate && navigator.vibrate) try { navigator.vibrate(12); } catch (e) {} }
+  function buzz() { if (window.CalcApp && CalcApp.haptic) CalcApp.haptic(12); }
   var nameCache = {};
   function cname(c) {
     var l = locale(), key = l + ':' + c;
@@ -4417,7 +4502,12 @@ svg { display: block; flex-shrink: 0; }
     var d = D();
     d.codes = d.codes.filter(function (c) { return c !== code; });
     if (d.pin === code) d.pin = null;
-    if (d.base === code && d.codes.length) { var nb = d.codes[0]; d.amount = trimmed(Math.round(calc(d, nb).raw * 100) / 100); d.base = nb; }
+    if (d.base === code) {   // the amount goes over to the next row, which becomes the input; the last one leaves none
+      var nb = d.codes[0] || '';
+      if (nb) d.amount = trimmed(Math.round(calc(d, nb).raw * 100) / 100);
+      d.base = nb;
+      if (S.edit === 'amount') S.edit = null;
+    }
   }
   function removeRow(row) {
     if (!row || row.classList.contains('rm')) return;
@@ -4621,7 +4711,9 @@ svg { display: block; flex-shrink: 0; }
         case 'manageDone': S.manage = false; break;
         case 'openPicker': S.q = ''; $('curQ').value = ''; $('curClr').hidden = true; renderPicker(); presentSheet('picker'); return;
         case 'closeSheets': dismissSheet(); break;
-        case 'add': if (d.codes.indexOf(a.dataset.code) < 0) d.codes.push(a.dataset.code); buzz(); break;   // the sheet stays open
+        case 'add':   // the sheet stays open; the first currency of an empty desk is its input
+          if (d.codes.indexOf(a.dataset.code) < 0) { d.codes.push(a.dataset.code); if (d.codes.indexOf(d.base) < 0) d.base = a.dataset.code; }
+          buzz(); break;
         case 'del': removeRow(a.closest('.mrow')); return;
         case 'goDesk': S.idx = +a.dataset.i; S.edit = null; dismissSheet(); break;
         case 'deskNew': S.deskEdit = { mode: 'new' }; S.deskDel = null; S.deskErr = false; S.deskDraft = ''; S.deskFocus = true; break;
@@ -4816,6 +4908,21 @@ svg { display: block; flex-shrink: 0; }
   function upd() { var c = getComputedStyle(document.body).backgroundColor; if (m && c) m.content = c; }
   new MutationObserver(upd).observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
   upd();
+})();
+// as an app on the iPhone: no page zoom by two fingers (nor into a field: maximum-scale above); the page goes back in
+// place when the iPhone keyboard closes
+document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+document.addEventListener('focusout', function () {
+  setTimeout(function () { if (!document.activeElement || document.activeElement === document.body) window.scrollTo(0, 0); }, 60);
+});
+// the app installed on a computer: its window opens on the first start as narrow as the app (then as the user leaves it)
+(function () {
+  try {
+    if (!matchMedia('(display-mode: standalone)').matches || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+    if (localStorage.getItem('calcrate.web.sized')) return;
+    localStorage.setItem('calcrate.web.sized', '1');
+    window.resizeTo(480, Math.min(screen.availHeight || 940, 940));
+  } catch (e) {}
 })();
 // offline: the service worker keeps the app; a new version on the site comes with the next start
 if ('serviceWorker' in navigator && window.isSecureContext && location.protocol !== 'file:') {
