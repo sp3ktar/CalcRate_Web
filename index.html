@@ -14,6 +14,22 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>body{margin:0}[hidden]{display:none!important}</style>
+<script>
+// iPhone home-screen app: the page is drawn from the top of the screen, under the status bar, but iOS gives it a height
+// shorter by the status bar (100 % = 844 of 912 pt on the iPhone Air) — the app then ended 68 pt above the bottom.
+// Its height: the whole screen.
+(function () {
+  if (!(navigator.standalone && /iPhone/.test(navigator.userAgent))) return;
+  function fit() {
+    var land = innerWidth > innerHeight, a = screen.width, b = screen.height;
+    var full = land ? Math.min(a, b) : Math.max(a, b);
+    document.documentElement.style.setProperty('--appH', Math.max(full, innerHeight) + 'px');
+  }
+  fit();
+  addEventListener('resize', fit);
+  addEventListener('orientationchange', function () { setTimeout(fit, 300); });
+})();
+</script>
 </head>
 <body>
 
@@ -528,6 +544,7 @@ body { padding: 0; overflow: hidden; }
 .screens > .phone { --top: max(18px, env(safe-area-inset-top, 0px)); }
 /* no page zoom: neither by two fingers nor by a double tap; the iPhone also zooms into a field it thinks too small
    (maximum-scale=1 in the viewport stops that) — a zoomed page cut the left edge off */
+html { height: var(--appH, 100%); }
 html { touch-action: pan-x pan-y; -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
 html, body { overscroll-behavior: none; }
 body { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
@@ -1625,6 +1642,7 @@ function buildGrid(el, keys) {
     var sl = k.left ? span('l', k.left.label) : null;
     b._k = k; b._parts = { u: su, d: sd, l: sl };
     el.appendChild(b);
+    addHap(b);
   });
 }
 
@@ -3075,8 +3093,9 @@ function applyBg() {
 window.CalcApp = { T: T, set: function () { return st.set; }, locale: langLocale, clipWrite: function (t) { clipWrite(t); },
   clipRead: function (cb) { clipRead(cb); }, pasteNumber: function (t) { return pasteNumber(t); }, fmt: function (v) { return fmt(v, true); },
   recalc: function () { renderCalc(); if (TAB === 'vars' || TAB === 'fns') renderLists(); },
-  haptic: function (p) { haptic(p); } };
+  haptic: function (p) { haptic(p); }, addHap: function (el) { addHap(el); } };
 function applySettings() {
+  hapSync();
   var o = st.set, root = document.documentElement;
   if (o.notation === 'sci') o.notation = 'eng';
   OUT.notation = o.notation; OUT.precision = o.precision; OUT.sep = o.sep === '\u2009' ? '\u2005' : o.sep;
@@ -3194,19 +3213,35 @@ document.getElementById('sepNone').addEventListener('click', function () { st.se
     hi.value = st.set.awakeHours; settingsChanged();
   });
 })();
-// vibration by the «Вибрация» setting: navigator.vibrate where the browser has it (Android); on the iPhone, where
-// pages get none, the tick of the system switch (iOS 18+: a label of <input type=checkbox switch> clicked from a touch)
+// vibration by the «Вибрация» setting. Android: navigator.vibrate. The iPhone gives pages no vibration — only the
+// system switch <input type=checkbox switch> ticks when it flips, and since iOS 26.5 only under a real finger (a page's
+// own label.click() no longer ticks). So on the iPhone every key carries a transparent <label> of a hidden switch:
+// the finger's own tap on the key flips it and the iPhone ticks (as ios-haptics does). Taps tick; swipes on a key don't.
 var IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+var TAPTICK = IOS && !navigator.vibrate, HAPS = [];
 function haptic(p) {
-  if (!st.set.vibrate) return;
-  try {
-    if (navigator.vibrate) { navigator.vibrate(p); return; }
-    if (!IOS) return;
-    var l = document.createElement('label'), i = document.createElement('input');
-    l.setAttribute('aria-hidden', 'true'); l.style.display = 'none';
-    i.type = 'checkbox'; i.setAttribute('switch', ''); i.tabIndex = -1;
-    l.appendChild(i); document.head.appendChild(l); l.click(); l.remove();
-  } catch (e) {}
+  if (!st.set.vibrate || TAPTICK) return;
+  try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {}
+}
+function addHap(el) {
+  if (!TAPTICK || !el || el.querySelector(':scope > label.hap')) return;
+  if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+  var l = document.createElement('label'), i = document.createElement('input');
+  l.className = 'hap'; l.setAttribute('aria-hidden', 'true');
+  l.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;z-index:3;margin:0;padding:0;border-radius:inherit;' +
+    'background:transparent;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;';
+  i.type = 'checkbox'; i.setAttribute('switch', ''); i.disabled = !st.set.vibrate;
+  i.style.cssText = 'visibility:hidden;position:absolute;left:0;top:0;width:1px;height:1px;margin:0;';
+  i.addEventListener('click', function (e) { e.stopPropagation(); });   // the click the label passes on is no second tap
+  l.appendChild(i); el.appendChild(l);
+  if (HAPS.length > 300) HAPS = HAPS.filter(function (x) { return x.isConnected; });
+  HAPS.push(i);
+}
+// «Вибрация» off: the switches cannot flip — no tick
+function hapSync() {
+  if (!HAPS) return;
+  HAPS = HAPS.filter(function (x) { return x.isConnected; });
+  HAPS.forEach(function (x) { x.disabled = !st.set.vibrate; });
 }
 function buzz() { haptic(12); }
 
@@ -3268,6 +3303,7 @@ function closeSettings() {
 document.getElementById('tbSet').addEventListener('click', openSettings);
 document.getElementById('setClose').addEventListener('click', closeSettings);
 document.getElementById('engBtn').addEventListener('click', function () { buzz(); hideXPaste(); st.eng = !st.eng; renderCalc(); save(); });
+addHap(document.getElementById('engBtn'));
 /* ---- the caret anywhere in the expression, as in text on iPhone (ExprLines.index / ExprEditor.place in the app) ----
    A tap puts the caret at the nearest place between the characters (into a name it does not go: before or after it,
    whichever is nearer). Hold (0.4 s): a loupe over the finger shows the caret's line 1.25 times bigger, the caret
@@ -4159,6 +4195,7 @@ svg { display: block; flex-shrink: 0; }
       return '<button class="k' + (k[1] ? ' ' + k[1] : '') + '" data-i="' + i + '" aria-label="' + esc(label) + (k[3] ? ', ↑ ' + k[3] : '') + '">' +
         (k[3] ? '<span class="u" aria-hidden="true">' + k[3] + '</span>' : '') + '<span class="m">' + esc(label) + '</span></button>';
     }).join('');
+    if (window.CalcApp && CalcApp.addHap) Array.prototype.forEach.call(kp.querySelectorAll('.k'), function (b) { CalcApp.addHap(b); });
   }
 
   /* Endless carousel: only three panels exist — previous, current, next.
