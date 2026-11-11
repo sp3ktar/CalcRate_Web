@@ -528,14 +528,15 @@ input.fpars { all: unset; flex: 0 0 auto; min-width: 40px; font-family: var(--mo
 /* A plain app, not a picture of a phone: no frame, no rounded corners; the app takes the whole height of the window
    and its width up to 520 (wider windows keep it in the middle, on the same background). On a phone — the whole screen.
    The four screens lie on one another and keep their size (the lines and the rows are measured on every one);
-   the open one is visible, the others are hidden and inert. */
+   the open one is visible, the others are hidden and inert. Hidden also by opacity: a part that shows itself
+   (the converter's keypad, sheets, settings: visibility: visible) would otherwise stay over the other screen. */
 html, body { height: 100%; }
 body { padding: 0; overflow: hidden; }
 .screens { max-width: none; height: 100%; margin: 0; padding: 0; box-sizing: border-box; gap: 0;
   display: grid; place-items: center; }
-.screens > .phone { grid-area: 1 / 1; visibility: hidden; width: min(100%, 520px); max-width: none; height: 100%;
+.screens > .phone { grid-area: 1 / 1; visibility: hidden; opacity: 0; width: min(100%, 520px); max-width: none; height: 100%;
   border: 0; border-radius: 0; --top: 18px; }
-.screens > .phone.cur { visibility: visible; z-index: 1; }
+.screens > .phone.cur { visibility: visible; opacity: 1; z-index: 1; }
 .screens > .phone { padding-top: var(--top) !important; }
 .phone::before, .phone::after { content: none; display: none; }
 .island { display: none; }
