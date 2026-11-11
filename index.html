@@ -590,7 +590,7 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
         <p class="vcap" data-t="Формат чисел">Формат чисел</p>
         <ul class="slist">
           <li><span class="sl" data-t="Запись">Запись</span><div class="seg sm ctl" data-set="notation"><button type="button" data-v="dec" data-t="Обычная">Обычная</button><button type="button" data-v="eng" data-t="Инженерная">Инженерная</button></div></li>
-          <li><span class="sl" data-t="Точность">Точность</span><div class="stepper ctl"><button type="button" id="precMinus" aria-label="−1">−</button><output id="precVal">10</output><button type="button" id="precPlus" aria-label="+1">+</button></div></li>
+          <li><span class="sl" data-t="Точность">Точность</span><div class="stepper ctl"><button type="button" id="precMinus" aria-label="−1">−</button><output id="precVal">2</output><button type="button" id="precPlus" aria-label="+1">+</button></div></li>
           <li><span class="sl" data-t="Разделитель">Разделитель</span><div class="seg sm ctl" id="sepGroup"><button type="button" id="sepNone" data-t="Нет">Нет</button><input id="sepIn" class="sepin" maxlength="2" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="свой" data-tp="свой"></div></li>
           <li><span class="sl" data-t="Пример">Пример</span><span class="sval" id="fmtEx"></span></li>
         </ul>
@@ -1178,7 +1178,7 @@ function evaluate(text, ctx) {
 }
 
 // output settings, as in the original: notation, decimals (digits after the point), thousands separator
-var OUT = { notation: 'dec', precision: 10, sep: ' ' };
+var OUT = { notation: 'dec', precision: 2, sep: ' ' };
 function groupInt(s, sep) {
   var neg = s[0] === '-', body = neg ? s.slice(1) : s;
   var parts = body.split('.'), ip = parts[0];
@@ -1261,7 +1261,9 @@ st.vars.forEach(function (v) { if (v.note === 'аргумент графиков
 st.fns.forEach(function (f) { delete f.ex; });
 st.vars.forEach(function (v) { if (v.cur) { v.formula = v.cur + (v.tail || ''); delete v.cur; delete v.tail; } });
 st.history.forEach(function (h) { if (h.recent == null) h.recent = true; });
-st.set = Object.assign({ mode: 'engineer', notation: 'dec', precision: 10, sep: '\u2009', lang: 'ru', theme: 'black', vibrate: true, contrast: false, awake: false, awakeHours: 0, onFly: true, bg: 0, bgInt: 40 }, st.set || {});
+st.set = Object.assign({ mode: 'engineer', notation: 'dec', precision: 2, sep: '\u2009', lang: 'ru', theme: 'black', vibrate: true, contrast: false, awake: false, awakeHours: 0, onFly: true, bg: 0, bgInt: 40 }, st.set || {});
+// «Точность» by default 2 (was 10): settings saved with the old default get the new one; a value set by hand stays
+if (!st.set.rev) { if (st.set.precision === 10) st.set.precision = 2; st.set.rev = 1; }
 if (!LANGS.some(function (l) { return l[0] === st.set.lang; })) st.set.lang = 'ru';
 LANG = st.set.lang;
 if (!Array.isArray(st.kpOrder)) st.kpOrder = [];
