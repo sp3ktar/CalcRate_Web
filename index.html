@@ -458,6 +458,8 @@ input.fpars { all: unset; flex: 0 0 auto; min-width: 40px; font-family: var(--mo
 .hlist li.sw .vslide { width: 100%; flex: 1 1 auto; box-sizing: border-box; }
 .sbody > .vcap { margin: 24px 0 7px 20px; }
 .sbody > .vcap:first-child { margin-top: 12px; }
+/* the note under a group (a List section's footer) */
+.sbody > .sfoot { margin: 7px 20px 0; font-size: 13px; line-height: 18px; color: var(--seclabel); }
 /* «Не гасить экран»: hours typed by hand (0–99, 0 — always) next to the switch */
 .hrs { margin-left: auto; flex: 0 0 64px; height: 30px; box-sizing: border-box; border-radius: 9px; background: var(--segbg); display: flex; align-items: center; justify-content: center; gap: 3px; padding: 0 8px; cursor: text; }
 .hrs input { all: unset; box-sizing: border-box; width: 2.2ch; text-align: right; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--fg); }
@@ -475,7 +477,8 @@ input.fpars { all: unset; flex: 0 0 auto; min-width: 40px; font-family: var(--mo
 .slist li + li::before { content: ""; position: absolute; left: 20px; right: 0; top: 0; height: .5px; background: var(--sep); }
 .slist li.col { padding: 12px 16px 12px 20px; }
 .sl { font-size: 17px; }
-.ctl { width: 230px; max-width: none; flex: 0 0 auto; }
+/* as SettingsView.controlWidth: 230 on the iPhone Air, narrower on a narrower screen (never below 150) */
+.ctl { width: min(230px, max(150px, calc(100vw - 190px))); max-width: none; flex: 0 0 auto; }
 .seg { gap: 2px; }
 .seg > button { padding: 7px 0; }
 .seg.sm > button { padding: 7px 4px; }
@@ -534,9 +537,14 @@ html, body { height: 100%; }
 body { padding: 0; overflow: hidden; }
 .screens { max-width: none; height: 100%; margin: 0; padding: 0; box-sizing: border-box; gap: 0;
   display: grid; place-items: center; }
-.screens > .phone { grid-area: 1 / 1; visibility: hidden; opacity: 0; width: min(100%, 520px); max-width: none; height: 100%;
+.screens > .phone { grid-area: 1 / 1; visibility: hidden; opacity: 0; width: min(100vw, 520px); max-width: none; height: 100%;
   border: 0; border-radius: 0; --top: 18px; }
 .screens > .phone.cur { visibility: visible; opacity: 1; z-index: 1; }
+/* on a computer: the app as on the iPhone Air — 420 wide, keys and settings of their own size (a percentage width
+   came out as narrow as the content in some Chrome builds: narrow keys, the settings' names cut) */
+@media (hover: hover) and (pointer: fine) {
+  .screens > .phone { width: min(100vw, 420px); }
+}
 .screens > .phone { padding-top: var(--top) !important; }
 .phone::before, .phone::after { content: none; display: none; }
 .island { display: none; }
@@ -591,9 +599,11 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
         <ul class="slist">
           <li><span class="sl" data-t="Запись">Запись</span><div class="seg sm ctl" data-set="notation"><button type="button" data-v="dec" data-t="Обычная">Обычная</button><button type="button" data-v="eng" data-t="Инженерная">Инженерная</button></div></li>
           <li><span class="sl" data-t="Точность">Точность</span><div class="stepper ctl"><button type="button" id="precMinus" aria-label="−1">−</button><output id="precVal">2</output><button type="button" id="precPlus" aria-label="+1">+</button></div></li>
+          <li><span class="sl" data-t="За нулями">За нулями</span><div class="stepper ctl"><button type="button" id="azMinus" aria-label="−1">−</button><output id="azVal">6</output><button type="button" id="azPlus" aria-label="+1">+</button></div></li>
           <li><span class="sl" data-t="Разделитель">Разделитель</span><div class="seg sm ctl" id="sepGroup"><button type="button" id="sepNone" data-t="Нет">Нет</button><input id="sepIn" class="sepin" maxlength="2" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="свой" data-tp="свой"></div></li>
           <li><span class="sl" data-t="Пример">Пример</span><span class="sval" id="fmtEx"></span></li>
         </ul>
+        <p class="sfoot" data-t="Точность — сколько знаков после точки: 12.35. За нулями — сколько знаков, если после точки столько нулей, что при «Точности» видны одни нули: 0.002367 вместо 0.00. «Выкл» — всегда по «Точности».">Точность — сколько знаков после точки: 12.35. За нулями — сколько знаков, если после точки столько нулей, что при «Точности» видны одни нули: 0.002367 вместо 0.00. «Выкл» — всегда по «Точности».</p>
         <p class="vcap" data-t="Оформление">Оформление</p>
         <ul class="slist">
           <li><label class="sl" for="langSel" data-t="Язык">Язык</label><div class="ctl selw"><select id="langSel"></select></div></li>
@@ -700,6 +710,8 @@ var DICT = {
   'Режим': ['Mode', '模式', 'मोड', 'Modo', 'الوضع', 'Mode', 'মোড', 'Modo', 'Mode', 'موڈ'],
   'Углы': ['Angles', '角度', 'कोण', 'Ángulos', 'الزوايا', 'Angles', 'কোণ', 'Ângulos', 'Sudut', 'زاویے'],
   'Запись': ['Notation', '记数法', 'संकेतन', 'Notación', 'الصيغة', 'Notation', 'নোটেশন', 'Notação', 'Notasi', 'نوٹیشن'],
+  'За нулями': ['After zeros', '零后位数', 'शून्यों के बाद', 'Tras los ceros', 'بعد الأصفار', 'Après les zéros', 'শূন্যের পরে', 'Após os zeros', 'Setelah nol', 'صفر کے بعد'],
+  'Точность — сколько знаков после точки: 12.35. За нулями — сколько знаков, если после точки столько нулей, что при «Точности» видны одни нули: 0.002367 вместо 0.00. «Выкл» — всегда по «Точности».': ['Decimals — how many digits after the point: 12.35. After zeros — how many digits when the point is followed by so many zeros that Decimals would show only zeros: 0.002367 instead of 0.00. “Off” — always as Decimals.', '小数位——小数点后显示几位：12.35。零后位数——小数点后的零多到按小数位只能显示零时显示几位：0.002367 而不是 0.00。“关”——始终按小数位。', 'दशमलव — बिंदु के बाद कितने अंक: 12.35। शून्यों के बाद — बिंदु के बाद इतने शून्य हों कि दशमलव से केवल शून्य दिखें, तब कितने अंक: 0.00 की जगह 0.002367। «बंद» — हमेशा दशमलव के अनुसार।', 'Decimales: cuántas cifras tras el punto: 12.35. Tras los ceros: cuántas cifras cuando tras el punto hay tantos ceros que con Decimales solo se verían ceros: 0.002367 en vez de 0.00. «No»: siempre según Decimales.', 'الكسور العشرية — كم رقمًا بعد الفاصلة: 12.35. بعد الأصفار — كم رقمًا حين يلي الفاصلة من الأصفار ما يجعل الكسور العشرية لا تُظهر إلا أصفارًا: 0.002367 بدل 0.00. «إيقاف» — دائمًا حسب الكسور العشرية.', 'Décimales : combien de chiffres après la virgule : 12.35. Après les zéros : combien de chiffres quand la virgule est suivie de tant de zéros qu’avec Décimales on ne verrait que des zéros : 0.002367 au lieu de 0.00. « Non » : toujours selon Décimales.', 'দশমিক — বিন্দুর পরে কত অঙ্ক: 12.35। শূন্যের পরে — বিন্দুর পরে এত শূন্য যে দশমিক অনুযায়ী শুধু শূন্য দেখা যেত, তখন কত অঙ্ক: 0.00-এর বদলে 0.002367। «বন্ধ» — সবসময় দশমিক অনুযায়ী।', 'Decimais: quantos dígitos após o ponto: 12.35. Após os zeros: quantos dígitos quando o ponto é seguido de tantos zeros que, com Decimais, só se veriam zeros: 0.002367 em vez de 0.00. «Desl.»: sempre conforme Decimais.', 'Desimal — berapa digit setelah titik: 12.35. Setelah nol — berapa digit bila setelah titik ada begitu banyak nol sehingga dengan Desimal hanya terlihat nol: 0.002367, bukan 0.00. «Mati» — selalu sesuai Desimal.', 'اعشاریہ — نقطے کے بعد کتنے ہندسے: 12.35۔ صفر کے بعد — جب نقطے کے بعد اتنے صفر ہوں کہ اعشاریہ سے صرف صفر نظر آئیں، تب کتنے ہندسے: 0.00 کے بجائے 0.002367۔ «آف» — ہمیشہ اعشاریہ کے مطابق۔'],
   'Точность': ['Decimals', '小数位', 'दशमलव', 'Decimales', 'الكسور العشرية', 'Décimales', 'দশমিক', 'Decimais', 'Desimal', 'اعشاریہ'],
   'Разделитель': ['Separator', '分隔符', 'विभाजक', 'Separador', 'الفاصل', 'Séparateur', 'বিভাজক', 'Separador', 'Pemisah', 'فاصل'],
   'Пример': ['Example', '示例', 'उदाहरण', 'Ejemplo', 'مثال', 'Exemple', 'উদাহরণ', 'Exemplo', 'Contoh', 'مثال'],
@@ -1178,7 +1190,7 @@ function evaluate(text, ctx) {
 }
 
 // output settings, as in the original: notation, decimals (digits after the point), thousands separator
-var OUT = { notation: 'dec', precision: 2, sep: ' ' };
+var OUT = { notation: 'dec', precision: 2, az: 6, sep: ' ' };
 function groupInt(s, sep) {
   var neg = s[0] === '-', body = neg ? s.slice(1) : s;
   var parts = body.split('.'), ip = parts[0];
@@ -1203,14 +1215,24 @@ function expForm(v, dp, eng) {
   if (Math.abs(Number(ms)) >= (eng ? 1000 : 10)) { e += eng ? 3 : 1; ms = fixedDp(mant(e), dp); }
   return ms + 'E' + e;
 }
-function fmtNum(v, dp, notation, sep) {
+// how many decimals a number gets: «Точность» (dp); with «За нулями» (az > dp) a number whose point is followed by dp
+// zeros or more — dp digits would show only zeros — gets az: 0.0023666 → 0.002367 (dp 2, az 6), 12.3456 → 12.35
+// (Calculator.decimalsShown)
+function decimalsShown(v, dp, az) {
+  if (!(az > dp) || dp < 1) return dp;
+  var a = Math.abs(v), f = a - Math.floor(a);
+  if (!(f > 0)) return dp;
+  var z = Math.max(0, -Math.floor(Math.log10(f)) - 1);   // zeros right after the point
+  return z >= dp ? az : dp;
+}
+function fmtNum(v, dp, notation, sep, az) {
   if (Number.isNaN(v)) return 'NaN';
   if (!isFinite(v)) return v > 0 ? '∞' : '−∞';
   if (v === 0) return '0';
   var a = Math.abs(v), s = '';
   var useE = a >= 1e15 || (notation === 'eng' && (a >= 1e3 || a < 1e-3));
   if (!useE) {
-    s = fixedDp(v, dp);
+    s = fixedDp(v, decimalsShown(v, dp, az));
     if (Number(s) === 0) { if (dp > 0) useE = true; else s = '0'; }   // too small for these decimals
   }
   if (useE) s = expForm(v, dp, notation === 'eng');
@@ -1218,7 +1240,7 @@ function fmtNum(v, dp, notation, sep) {
   return s.replace(/-/g, '−');
 }
 // what the screen shows (precision, notation, separator)
-function fmt(v, group) { return fmtNum(v, OUT.precision, OUT.notation, group ? OUT.sep : ''); }
+function fmt(v, group) { return fmtNum(v, OUT.precision, OUT.notation, group ? OUT.sep : '', OUT.az); }
 // full precision, for values that are edited again (variables)
 function plain(v) { return fmtNum(v, 15, 'dec', '').replace(/−/g, '-'); }
 // the shown value without separators, put into the expression by «=» and M
@@ -1261,9 +1283,23 @@ st.vars.forEach(function (v) { if (v.note === 'аргумент графиков
 st.fns.forEach(function (f) { delete f.ex; });
 st.vars.forEach(function (v) { if (v.cur) { v.formula = v.cur + (v.tail || ''); delete v.cur; delete v.tail; } });
 st.history.forEach(function (h) { if (h.recent == null) h.recent = true; });
-st.set = Object.assign({ mode: 'engineer', notation: 'dec', precision: 2, sep: '\u2009', lang: 'ru', theme: 'black', vibrate: true, contrast: false, awake: false, awakeHours: 0, onFly: true, bg: 0, bgInt: 40 }, st.set || {});
-// «Точность» by default 2 (was 10): settings saved with the old default get the new one; a value set by hand stays
-if (!st.set.rev) { if (st.set.precision === 10) st.set.precision = 2; st.set.rev = 1; }
+var hadSet = !!st.set, hadPrec = hadSet && st.set.precision != null;
+st.set = Object.assign({ mode: 'engineer', notation: 'dec', precision: 2, az: 6, sep: '\u2009', lang: 'ru', theme: 'black', vibrate: true, contrast: false, awake: false, awakeHours: 0, onFly: true, bg: 0, bgInt: 40 }, st.set || {});
+// «Точность» 2 and «За нулями» 6 by default (rev 3). Saved before «За нулями» (rev < 2): the old defaults (10, then 2;
+// before rev 1 also 2 set by hand) become 2 and 6, another precision stays with «За нулями» off. Saved with the first
+// «За нулями» (rev 2: «Точность» the most decimals, «За нулями» digits after the zeros): «Точность» up to 2, the most
+// becomes «За нулями»
+if (!hadPrec) st.set.rev = 3;
+else if ((st.set.rev || 0) < 3) {
+  var p = st.set.precision, r = st.set.rev || 0;
+  if (r < 2) {
+    var oldDefault = r ? p === 2 : (p === 10 || p === 2);
+    if (oldDefault) { st.set.precision = 2; st.set.az = 6; } else st.set.az = 0;
+  } else if (st.set.az > 0) { st.set.precision = Math.min(p, 2); st.set.az = p > st.set.precision ? p : 0; }
+  else st.set.az = 0;
+  st.set.rev = 3;
+}
+if (st.set.az && st.set.az <= st.set.precision) st.set.az = st.set.precision < 15 ? st.set.precision + 1 : 0;
 if (!LANGS.some(function (l) { return l[0] === st.set.lang; })) st.set.lang = 'ru';
 LANG = st.set.lang;
 if (!Array.isArray(st.kpOrder)) st.kpOrder = [];
@@ -3101,7 +3137,7 @@ function applySettings() {
   hapSync();
   var o = st.set, root = document.documentElement;
   if (o.notation === 'sci') o.notation = 'eng';
-  OUT.notation = o.notation; OUT.precision = o.precision; OUT.sep = o.sep === '\u2009' ? '\u2005' : o.sep;
+  OUT.notation = o.notation; OUT.precision = o.precision; OUT.az = o.az || 0; OUT.sep = o.sep === '\u2009' ? '\u2005' : o.sep;
   Array.prototype.forEach.call(document.querySelectorAll('.screens > .phone'), function (ph) { ph.classList.toggle('light', o.theme === 'light'); });
   root.classList.toggle('t-graphite', o.theme === 'graphite');
   root.classList.toggle('t-light', o.theme === 'light');
@@ -3134,7 +3170,11 @@ function renderSettings() {
   document.getElementById('precVal').textContent = o.precision;
   document.getElementById('precMinus').disabled = o.precision <= 0;
   document.getElementById('precPlus').disabled = o.precision >= 15;
-  document.getElementById('fmtEx').textContent = fmt(1234.56789, true);
+  document.getElementById('azVal').textContent = o.az ? o.az : T('Выкл');
+  document.getElementById('azMinus').disabled = !o.az;
+  document.getElementById('azPlus').disabled = o.az >= 15 || o.precision >= 15;
+  document.getElementById('fmtEx').textContent = fmt(1234.56789, true) + ' · ' + fmt(0.0023666, true);
+  fitLabels();
   // separator: «Нет», or the own character typed into the field next to it
   var none = !o.sep, si = document.getElementById('sepIn');
   document.getElementById('sepNone').setAttribute('aria-selected', String(none));
@@ -3186,8 +3226,12 @@ document.getElementById('bgIntR').addEventListener('input', function (e) {
   st.set.bgInt = +e.target.value; document.getElementById('bgIntO').textContent = st.set.bgInt; applyBg(); save();
 });
 document.getElementById('langSel').addEventListener('change', function (e) { st.set.lang = e.target.value; settingsChanged(true); });
-document.getElementById('precMinus').addEventListener('click', function () { st.set.precision = Math.max(0, st.set.precision - 1); settingsChanged(); });
-document.getElementById('precPlus').addEventListener('click', function () { st.set.precision = Math.min(15, st.set.precision + 1); settingsChanged(); });
+// «За нулями» is «Выкл» or more than «Точность»: it follows «Точность» up
+function keepAz() { if (st.set.az && st.set.az <= st.set.precision) st.set.az = st.set.precision < 15 ? st.set.precision + 1 : 0; }
+document.getElementById('precMinus').addEventListener('click', function () { st.set.precision = Math.max(0, st.set.precision - 1); keepAz(); settingsChanged(); });
+document.getElementById('precPlus').addEventListener('click', function () { st.set.precision = Math.min(15, st.set.precision + 1); keepAz(); settingsChanged(); });
+document.getElementById('azMinus').addEventListener('click', function () { st.set.az = st.set.az > st.set.precision + 1 ? st.set.az - 1 : 0; settingsChanged(); });
+document.getElementById('azPlus').addEventListener('click', function () { st.set.az = st.set.az ? Math.min(15, st.set.az + 1) : Math.min(15, st.set.precision + 1); keepAz(); settingsChanged(); });
 document.getElementById('sepNone').addEventListener('click', function () { st.set.sep = ''; settingsChanged(); });
 (function () {
   var si = document.getElementById('sepIn');
@@ -3297,7 +3341,18 @@ function openSettings() {
   var sh = document.getElementById('setSheet');
   document.getElementById('histSheet').hidden = true; renderSettings();
   sh.style.transform = ''; sh.classList.add('off'); sh.hidden = false; void sh.offsetWidth; sh.classList.remove('off');
+  fitLabels();
 }
+// a setting's name too long for its row gets smaller, down to 80 % (SettingsView.row: minimumScaleFactor 0.8)
+function fitLabels() {
+  Array.prototype.forEach.call(document.querySelectorAll('#setSheet .sl'), function (el) {
+    el.style.fontSize = '';
+    if (!el.clientWidth || el.scrollWidth <= el.clientWidth) return;
+    var fs = parseFloat(getComputedStyle(el).fontSize);
+    el.style.fontSize = Math.max(fs * 0.8, Math.floor(fs * el.clientWidth / el.scrollWidth * 10) / 10) + 'px';
+  });
+}
+window.addEventListener('resize', fitLabels);
 function closeSettings() {
   var sh = document.getElementById('setSheet'); if (sh.hidden) return;
   sh.style.transition = ''; void sh.offsetWidth; sh.style.transform = ''; sh.classList.add('off');
@@ -4955,13 +5010,15 @@ document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
 document.addEventListener('focusout', function () {
   setTimeout(function () { if (!document.activeElement || document.activeElement === document.body) window.scrollTo(0, 0); }, 60);
 });
-// the app installed on a computer: its window opens on the first start as narrow as the app (then as the user leaves it)
+// the app installed on a computer: its window is sized once to the app — 420 wide as the iPhone Air, up to 912 high
+// (later as the user leaves it)
 (function () {
   try {
     if (!matchMedia('(display-mode: standalone)').matches || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
-    if (localStorage.getItem('calcrate.web.sized')) return;
-    localStorage.setItem('calcrate.web.sized', '1');
-    window.resizeTo(480, Math.min(screen.availHeight || 940, 940));
+    if (localStorage.getItem('calcrate.web.sized2')) return;
+    localStorage.setItem('calcrate.web.sized2', '1');
+    var dw = Math.max(0, outerWidth - innerWidth), dh = Math.max(0, outerHeight - innerHeight);
+    window.resizeTo(420 + dw, Math.min(912 + dh, screen.availHeight || 912 + dh));
   } catch (e) {}
 })();
 // offline: the service worker keeps the app; a new version on the site comes with the next start
