@@ -33,6 +33,47 @@
 </head>
 <body>
 
+<script>
+// On a computer: the app as on the iPhone Air — 420 wide — scaled to fill the window's width (Chrome keeps an app window
+// 500 or more wide: the app stood in the middle between dark strips). A window too low for that: the app takes its
+// height and stands in the middle, on its background. The app goes on measuring in its own pixels: pointer coordinates
+// and the boxes of the page come to it unscaled, as on the phone. Phones and tablets: as before, the screen is the app.
+(function () {
+  if (!window.matchMedia || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  var W = 420, MIN_H = 700, Z = 1, root = document.documentElement;
+  function fit() {
+    var w = innerWidth, h = innerHeight;
+    if (!(w > 0 && h > 0)) return;
+    var z = Math.max(0.5, Math.min(w / W, h / MIN_H));
+    if (Math.abs(z - 1) < 0.002) z = 1;
+    Z = z;
+    root.style.zoom = z === 1 ? '' : String(z);
+    root.style.setProperty('--vw', w / z + 'px');
+  }
+  fit();
+  addEventListener('resize', fit);
+  function unscaled(proto, names) {
+    names.forEach(function (n) {
+      var d = Object.getOwnPropertyDescriptor(proto, n);
+      if (d && d.get && d.configurable) Object.defineProperty(proto, n, { configurable: true, enumerable: d.enumerable,
+        get: function () { var v = d.get.call(this); return Z === 1 ? v : v / Z; } });
+    });
+  }
+  unscaled(MouseEvent.prototype, ['clientX', 'clientY', 'x', 'y', 'pageX', 'pageY']);
+  if (window.Touch) unscaled(Touch.prototype, ['clientX', 'clientY', 'pageX', 'pageY']);
+  function box(r) { return Z === 1 ? r : new DOMRect(r.x / Z, r.y / Z, r.width / Z, r.height / Z); }
+  [Element.prototype, Range.prototype].forEach(function (p) {
+    var f = p.getBoundingClientRect;
+    p.getBoundingClientRect = function () { return box(f.call(this)); };
+  });
+  [Document.prototype, window.ShadowRoot && ShadowRoot.prototype].forEach(function (p) {
+    var e1 = p && p.elementFromPoint, e2 = p && p.elementsFromPoint;
+    if (e1) p.elementFromPoint = function (x, y) { return e1.call(this, x * Z, y * Z); };
+    if (e2) p.elementsFromPoint = function (x, y) { return e2.call(this, x * Z, y * Z); };
+  });
+  window.APP_ZOOM = function () { return Z; };
+})();
+</script>
 <style>
 /* Prototype: calculator, variables and functions screens side by side (stacking on narrow screens).
    Themes are sets of colour tokens on <html>: dark (default), graphite and light. */
@@ -105,7 +146,7 @@ h1 { margin: 0; font-size: 20px; font-weight: 700; text-wrap: balance; }
 .island { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 124px; height: 36px; border-radius: 18px; background: #000; z-index: 96; pointer-events: none; }
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50;
-  width: max-content; max-width: min(360px, calc(100vw - 40px)); box-sizing: border-box; text-align: center;
+  width: max-content; max-width: min(360px, calc(var(--vw, 100vw) - 40px)); box-sizing: border-box; text-align: center;
   background: var(--toast); color: var(--toastfg); padding: 8px 14px; border-radius: 16px; font-size: 13px; line-height: 18px;
   opacity: 0; transition: opacity .2s; pointer-events: none;
 }
@@ -478,7 +519,7 @@ input.fpars { all: unset; flex: 0 0 auto; min-width: 40px; font-family: var(--mo
 .slist li.col { padding: 12px 16px 12px 20px; }
 .sl { font-size: 17px; }
 /* as SettingsView.controlWidth: 230 on the iPhone Air, narrower on a narrower screen (never below 150) */
-.ctl { width: min(230px, max(150px, calc(100vw - 190px))); max-width: none; flex: 0 0 auto; }
+.ctl { width: min(230px, max(150px, calc(var(--vw, 100vw) - 190px))); max-width: none; flex: 0 0 auto; }
 .seg { gap: 2px; }
 .seg > button { padding: 7px 0; }
 .seg.sm > button { padding: 7px 4px; }
@@ -530,6 +571,7 @@ input.fpars { all: unset; flex: 0 0 auto; min-width: 40px; font-family: var(--mo
 /* ===================== CalcRate for Chrome: one app window ===================== */
 /* A plain app, not a picture of a phone: no frame, no rounded corners; the app takes the whole height of the window
    and its width up to 520 (wider windows keep it in the middle, on the same background). On a phone — the whole screen.
+   On a computer the page is scaled (the script in the head): the app is 420 wide and fills the window's width.
    The four screens lie on one another and keep their size (the lines and the rows are measured on every one);
    the open one is visible, the others are hidden and inert. Hidden also by opacity: a part that shows itself
    (the converter's keypad, sheets, settings: visibility: visible) would otherwise stay over the other screen. */
@@ -537,13 +579,13 @@ html, body { height: 100%; }
 body { padding: 0; overflow: hidden; }
 .screens { max-width: none; height: 100%; margin: 0; padding: 0; box-sizing: border-box; gap: 0;
   display: grid; place-items: center; }
-.screens > .phone { grid-area: 1 / 1; visibility: hidden; opacity: 0; width: min(100vw, 520px); max-width: none; height: 100%;
+.screens > .phone { grid-area: 1 / 1; visibility: hidden; opacity: 0; width: min(var(--vw, 100vw), 520px); max-width: none; height: 100%;
   border: 0; border-radius: 0; --top: 18px; }
 .screens > .phone.cur { visibility: visible; opacity: 1; z-index: 1; }
 /* on a computer: the app as on the iPhone Air — 420 wide, keys and settings of their own size (a percentage width
    came out as narrow as the content in some Chrome builds: narrow keys, the settings' names cut) */
 @media (hover: hover) and (pointer: fine) {
-  .screens > .phone { width: min(100vw, 420px); }
+  .screens > .phone { width: min(var(--vw, 100vw), 420px); }
 }
 .screens > .phone { padding-top: var(--top) !important; }
 .phone::before, .phone::after { content: none; display: none; }
