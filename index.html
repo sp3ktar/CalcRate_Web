@@ -5110,15 +5110,14 @@ document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
 document.addEventListener('focusout', function () {
   setTimeout(function () { if (!document.activeElement || document.activeElement === document.body) window.scrollTo(0, 0); }, 60);
 });
-// the app installed on a computer: its window is sized once, compact as a desktop calculator — as narrow as Chrome
-// lets an app window be (500), as high as the app needs at that width (later as the user leaves it)
+// the app installed on a computer: its window is sized once as the Windows calculator's — 320 × 532 with the title
+// bar (Chrome's limit of 500 is for its tabbed windows only; an app window may be narrower); later as the user leaves it
 (function () {
   try {
     if (!matchMedia('(display-mode: standalone)').matches || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
-    if (localStorage.getItem('calcrate.web.sized3')) return;
-    localStorage.setItem('calcrate.web.sized3', '1');
-    var dw = Math.max(0, outerWidth - innerWidth), dh = Math.max(0, outerHeight - innerHeight);
-    window.resizeTo(500 + dw, Math.min(679 + dh, screen.availHeight || 679 + dh));
+    if (localStorage.getItem('calcrate.web.sized4')) return;
+    localStorage.setItem('calcrate.web.sized4', '1');
+    window.resizeTo(320, Math.min(532, screen.availHeight || 532));
   } catch (e) {}
 })();
 // offline: the service worker keeps the app; a new version on the site comes with the next start
