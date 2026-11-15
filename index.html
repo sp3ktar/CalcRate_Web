@@ -34,17 +34,20 @@
 <body>
 
 <script>
-// On a computer: the app as on the iPhone Air — 420 wide — scaled to fill the window's width (Chrome keeps an app window
-// 500 or more wide: the app stood in the middle between dark strips). A window too low for that: the app takes its
-// height and stands in the middle, on its background. The app goes on measuring in its own pixels: pointer coordinates
-// and the boxes of the page come to it unscaled, as on the phone. Phones and tablets: as before, the screen is the app.
+// On a computer: the app scaled to the window, as a desktop calculator fills its own. Its width — as the iPhone Air,
+// 420 of its pixels, over the whole width of the window (Chrome keeps an app window 500 or more wide); a window too low
+// for that: the app gets the window's height and its keys get wider (up to 560 of its pixels, then it stands in the
+// middle, on its background). The height it needs: the keypad and the display at its least, with ENG its rows too.
+// The app goes on measuring in its own pixels: pointer coordinates and the boxes of the page come to it unscaled, as
+// on the phone. Phones and tablets: as before, the screen is the app.
 (function () {
   if (!window.matchMedia || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
-  var W = 420, MIN_H = 700, Z = 1, root = document.documentElement;
+  var W = 420, NEED = 570, NEED_ENG = 690, Z = 1, root = document.documentElement, eng = false;
+  try { eng = !!(JSON.parse(localStorage.getItem('calcrate.web.calc') || '{}') || {}).eng; } catch (e) {}
   function fit() {
     var w = innerWidth, h = innerHeight;
     if (!(w > 0 && h > 0)) return;
-    var z = Math.max(0.5, Math.min(w / W, h / MIN_H));
+    var z = Math.max(0.5, Math.min(w / W, h / (eng ? NEED_ENG : NEED)));
     if (Math.abs(z - 1) < 0.002) z = 1;
     Z = z;
     root.style.zoom = z === 1 ? '' : String(z);
@@ -52,6 +55,21 @@
   }
   fit();
   addEventListener('resize', fit);
+  // ENG shown or hidden: the app needs another height
+  document.addEventListener('DOMContentLoaded', function () {
+    var c = document.getElementById('calc');
+    if (!c) return;
+    // the app fits its lines on a resize: it hears of the new scale the same way
+    function upd() {
+      var e = c.classList.contains('eng-on');
+      if (e === eng) return;
+      eng = e;
+      var was = Z; fit();
+      if (Z !== was) window.dispatchEvent(new Event('resize'));
+    }
+    new MutationObserver(upd).observe(c, { attributes: true, attributeFilter: ['class'] });
+    upd();
+  });
   function unscaled(proto, names) {
     names.forEach(function (n) {
       var d = Object.getOwnPropertyDescriptor(proto, n);
@@ -582,17 +600,40 @@ body { padding: 0; overflow: hidden; }
 .screens > .phone { grid-area: 1 / 1; visibility: hidden; opacity: 0; width: min(var(--vw, 100vw), 520px); max-width: none; height: 100%;
   border: 0; border-radius: 0; --top: 18px; }
 .screens > .phone.cur { visibility: visible; opacity: 1; z-index: 1; }
-/* on a computer: the app as on the iPhone Air — 420 wide, keys and settings of their own size (a percentage width
-   came out as narrow as the content in some Chrome builds: narrow keys, the settings' names cut) */
+/* the bar at the bottom of a computer's window: a short line in the middle, brighter under the pointer */
+.menubar { display: none; position: fixed; left: 0; right: 0; bottom: 0; height: 18px; margin: 0; padding: 0; border: 0;
+  background: transparent; cursor: pointer; z-index: 50; }
+.menubar i { position: absolute; left: 50%; top: 7px; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px;
+  background: var(--fg); opacity: .28; transition: opacity .15s; }
+.menubar:hover i, html.menu-open .menubar i { opacity: .7; }
+.menubar:focus { outline: none; }
+.menubar:focus-visible i { opacity: 1; box-shadow: 0 0 0 2px var(--accent); }
+/* On a computer: as compact as a desktop calculator. The app fills the window (the script in the head scales it;
+   a low window gives wider keys, up to 560 of the app's pixels), small margins, no space kept for the tab bar: it is
+   folded away and comes up from the bar at the bottom of the window (a tab or a click elsewhere folds it again).
+   Widths in pixels, never in percent: a percentage width came out as narrow as the content in some Chrome builds. */
 @media (hover: hover) and (pointer: fine) {
-  .screens > .phone { width: min(var(--vw, 100vw), 420px); }
+  .screens > .phone { width: min(var(--vw, 100vw), 560px); --top: 6px; --kp-pb: 30px; }
+  .screens > .phone, .screens > .phone.calc, .screens > .phone.cvt.kpopen { padding-bottom: 20px !important; }
+  .calc { padding: 0 6px; }
+  .fkp { padding-bottom: 26px; margin-bottom: -20px; }
+  .sbody { padding-bottom: 24px; }
+  .toast { bottom: 57px; }
+  .screens > .phone > nav.tabs { transform: translateY(calc(100% + 40px)); opacity: 0; visibility: hidden;
+    transition: transform .22s cubic-bezier(.2, .8, .2, 1), opacity .18s, visibility 0s linear .22s; }
+  html.menu-open .screens > .phone > nav.tabs { transform: none; opacity: 1; visibility: visible;
+    transition: transform .22s cubic-bezier(.2, .8, .2, 1), opacity .18s, visibility 0s; }
+  .menubar { display: block; }
 }
+@media (prefers-reduced-motion: reduce) { .screens > .phone > nav.tabs { transition: none !important; } }
 .screens > .phone { padding-top: var(--top) !important; }
 .phone::before, .phone::after { content: none; display: none; }
 .island { display: none; }
 /* ===================== the home-screen app ===================== */
 /* the screens start below the iPhone's status bar and Dynamic Island (68 pt on the iPhone Air, as in the app) */
 .screens > .phone { --top: max(18px, env(safe-area-inset-top, 0px)); }
+/* a computer: the window's own title bar is above, a small margin is enough (as in the web version) */
+@media (hover: hover) and (pointer: fine) { .screens > .phone { --top: 6px; } }
 /* no page zoom: neither by two fingers nor by a double tap; the iPhone also zooms into a field it thinks too small
    (maximum-scale=1 in the viewport stops that) — a zoomed page cut the left edge off */
 html { height: var(--appH, 100%); }
@@ -710,6 +751,7 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
     <nav class="tabs" data-on="conv"></nav>
   </section>
 </div>
+<button type="button" class="menubar" id="menuBar" aria-label="Меню" title="Меню" aria-expanded="false"><i></i></button>
 <div class="toast" id="toast" role="status"></div>
 
 <script>
@@ -1601,16 +1643,17 @@ function K(main, opt) { opt = opt || {}; opt.main = main; return opt; }
 var CLOCK = '<svg class="clock" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6"></path><path d="M4 4v4h4"></path><path d="M12 8v4l3 2"></path></svg>';
 
 var ARC = '<span class="arc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z" fill="currentColor"></path></svg></span>';
+// the layout Maks set in the layout editor (15.11.2026): on top = ◀ ▶ C ⌫; «( )» and M in the right column
 var MAIN = [
-  K(C('M', 'mr'), { up: C('M+', 'm+'), down: C('M−', 'm-'), t: 'fn' }),
-  K(I('()', '( )'), { up: I('('), down: I(')'), left: C('(…)', 'wrap'), t: 'fn' }),
+  K(C('=', 'eq'), { t: 'eq' }),
   K(C('◀', 'left'), { up: C('◀◀', 'home'), t: 'fn' }),
   K(C('▶', 'right'), { up: C('▶▶', 'end'), t: 'fn' }),
-  K(C('=', 'eq'), { t: 'eq' }),
-  K(I('7')), K(I('8')), K(I('9')), K(I('÷'), { t: 'op' }),
   K(C('C', 'clear'), { up: C('MC', 'mc'), t: 'ctl' }),
-  K(I('4')), K(I('5')), K(I('6')), K(I('×'), { t: 'op' }),
   K(C('⌫', 'bs'), { up: C('CE', 'ce'), t: 'ctl' }),
+  K(I('7')), K(I('8')), K(I('9')), K(I('÷'), { t: 'op' }),
+  K(I('()', '( )'), { up: I('('), down: I(')'), left: C('(…)', 'wrap'), t: 'fn' }),
+  K(I('4')), K(I('5')), K(I('6')), K(I('×'), { t: 'op' }),
+  K(C('M', 'mr'), { up: C('M+', 'm+'), down: C('M−', 'm-'), t: 'fn' }),
   K(I('1')), K(I('2')), K(I('3')), K(I('-', '−'), { t: 'op' }),
   K(C('ƒ(x)', 'fx'), { up: C('+ƒ', 'savefn'), down: C('+x', 'savevar'), t: 'fn', small: 1 }),
   K(C('+/−', 'neg'), { up: I('%'), t: 'fn', small: 1 }),
@@ -3364,12 +3407,27 @@ function showTab(id) {
   });
   if (id !== 'conv') lastPhone = document.getElementById(id);
   hideXPaste();
+  menuOpen(false);
   try { localStorage.setItem('calcrate.web.tab', id); } catch (e) {}
   if (id === 'calc') renderCalc();
   else if (id === 'conv') { if (window.ConvApp) window.ConvApp.look(); }
   else renderLists();
 }
 function flashPhone(id) { showTab(id); }
+// a computer: the tab bar is folded away; the bar at the bottom of the window opens and closes it, a tab or a click
+// anywhere else closes it
+var menuBar = document.getElementById('menuBar');
+function menuOpen(on) {
+  document.documentElement.classList.toggle('menu-open', on);
+  if (menuBar) menuBar.setAttribute('aria-expanded', on ? 'true' : 'false');
+}
+if (menuBar) menuBar.addEventListener('click', function () { menuOpen(!document.documentElement.classList.contains('menu-open')); });
+document.addEventListener('pointerdown', function (e) {
+  if (!document.documentElement.classList.contains('menu-open')) return;
+  var t = e.target;
+  if (t && t.closest && (t.closest('nav.tabs') || t.closest('#menuBar'))) return;
+  menuOpen(false);
+}, true);
 document.addEventListener('click', function (e) {
   var b = e.target.closest('nav.tabs button'); if (!b) return;
   var t = b.dataset.tab;
@@ -3816,7 +3874,7 @@ svg { display: block; flex-shrink: 0; }
 /* ConvKeypad: padding 8 / 8 / 10, keys 52 high, gap 6 (244 in all) above the tab bar (83 pt from the bottom);
    its kpBg goes on under the tab bar to the bottom edge */
 .kp {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; box-sizing: border-box; padding: 8px 8px 93px;
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; box-sizing: border-box; padding: 8px 8px var(--kp-pb, 93px);
   background: var(--kpbg); box-shadow: inset 0 1px 0 var(--line);
   display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: repeat(4, 52px); gap: 6px;
   transform: translateY(100%); visibility: hidden; touch-action: none; transition: transform .22s ease-out, visibility 0s linear .22s;
@@ -5052,15 +5110,15 @@ document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
 document.addEventListener('focusout', function () {
   setTimeout(function () { if (!document.activeElement || document.activeElement === document.body) window.scrollTo(0, 0); }, 60);
 });
-// the app installed on a computer: its window is sized once to the app — 420 wide as the iPhone Air, up to 912 high
-// (later as the user leaves it)
+// the app installed on a computer: its window is sized once, compact as a desktop calculator — as narrow as Chrome
+// lets an app window be (500), as high as the app needs at that width (later as the user leaves it)
 (function () {
   try {
     if (!matchMedia('(display-mode: standalone)').matches || !matchMedia('(hover: hover) and (pointer: fine)').matches) return;
-    if (localStorage.getItem('calcrate.web.sized2')) return;
-    localStorage.setItem('calcrate.web.sized2', '1');
+    if (localStorage.getItem('calcrate.web.sized3')) return;
+    localStorage.setItem('calcrate.web.sized3', '1');
     var dw = Math.max(0, outerWidth - innerWidth), dh = Math.max(0, outerHeight - innerHeight);
-    window.resizeTo(420 + dw, Math.min(912 + dh, screen.availHeight || 912 + dh));
+    window.resizeTo(500 + dw, Math.min(679 + dh, screen.availHeight || 679 + dh));
   } catch (e) {}
 })();
 // offline: the service worker keeps the app; a new version on the site comes with the next start
