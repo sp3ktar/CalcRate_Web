@@ -1163,6 +1163,7 @@ function lazy(name, a, ctx) {
     if (a.length !== 4) throw new CalcError((name === 'sum' ? '∑' : '∏') + T('(выражение, i, от, до)'));
     var lo = rnd(ev(a[2], ctx)), hi = rnd(ev(a[3], ctx));
     if (!isFinite(lo) || !isFinite(hi)) throw new CalcError('Не определено');
+    if (!Number.isSafeInteger(lo) || !Number.isSafeInteger(hi)) throw new CalcError('Слишком много шагов');
     if (hi - lo > 1e6) throw new CalcError('Слишком много шагов');
     var acc = name === 'sum' ? 0 : 1;
     for (var k = lo; k <= hi; k++) { var y = f(k); acc = name === 'sum' ? acc + y : acc * y; }
@@ -1221,8 +1222,8 @@ function fn(n, a, ctx) {
     case 'min': if (!a.length) throw new CalcError('{0}: нет аргументов', ['min']); return Math.min.apply(null, a);
     case 'max': if (!a.length) throw new CalcError('{0}: нет аргументов', ['max']); return Math.max.apply(null, a);
     case 'mod': need(2); if (a[1] === 0) throw new CalcError('Деление на ноль'); var r = a[0] % a[1]; return r < 0 ? r + Math.abs(a[1]) : r;
-    case 'ncr': need(2); return rnd(fact(a[0]) / (fact(a[1]) * fact(a[0] - a[1])));
-    case 'npr': need(2); return rnd(fact(a[0]) / fact(a[0] - a[1]));
+    case 'ncr': need(2); return calcrateCombinator(a[0], a[1], false);
+    case 'npr': need(2); return calcrateCombinator(a[0], a[1], true);
     case 'gcd': need(2); var x = Math.abs(rnd(a[0])), y = Math.abs(rnd(a[1])); while (y) { var tq = y; y = x % y; x = tq; } return x;
     case 'lcm': need(2); var g = fn('gcd', a, ctx); return g === 0 ? 0 : Math.abs(a[0] * a[1]) / g;
   }
@@ -1232,39 +1233,97 @@ function fn(n, a, ctx) {
 /* smart paste: "99 999,01" → 99999.01, "$43,100.5" → 43100.5, "1,500" → 1500 */
 var GROUP = /[ \u00a0\u2009\u2005\u202f'’]/;
 function normalizePaste(text) {
-  var t = text.trim(), chars = Array.from(t);
+  var chars = Array.from(String(text == null ? '' : text).trim());
   var first = chars.findIndex(function (c) { return /[0-9]/.test(c); });
   if (first < 0) return null;
-  var last = chars.length - 1; while (!/[0-9]/.test(chars[last])) last--;
+
+  // ".5", ",5", "$.5" — дробь, а не целое 5.
+  if (first > 0 && /[.,]/.test(chars[first - 1])) {
+    chars.splice(first - 1, 0, '0');
+    first--;
+  }
+
+  var last = chars.length - 1;
+  while (!/[0-9]/.test(chars[last])) last--;
+
   var core = chars.slice(first, last + 1);
-  if (!core.every(function (c) { return /[0-9.,]/.test(c) || GROUP.test(c); })) return null;
+  if (!core.every(function (c) {
+    return /[0-9.,]/.test(c) || GROUP.test(c);
+  })) return null;
+
   var around = chars.slice(0, first).concat(chars.slice(last + 1));
-  if (!around.every(function (c) { return /[\p{L}\p{Sc}\s.+\-−]/u.test(c); })) return null;
-  var neg = chars.slice(0, first).some(function (c) { return c === '-' || c === '−'; });
+  if (!around.every(function (c) {
+    return /[\p{L}\p{Sc}\s.+\-−]/u.test(c);
+  })) return null;
+
+  var neg = chars.slice(0, first).some(function (c) {
+    return c === '-' || c === '−';
+  });
   var hasGroup = core.some(function (c) { return GROUP.test(c); });
   var s = core.filter(function (c) { return !GROUP.test(c); }).join('');
-  var commas = (s.match(/,/g) || []).length, dots = (s.match(/\./g) || []).length;
+  var commas = (s.match(/,/g) || []).length;
+  var dots = (s.match(/\./g) || []).length;
+
   if (commas && dots) {
-    var dec = s[Math.max(s.lastIndexOf(','), s.lastIndexOf('.'))], grp = dec === ',' ? '.' : ',';
-    s = s.split(grp).join('');
-    if (s.split(dec).length !== 2) return null;
-    s = s.replace(dec, '.');
+    var dec = s[Math.max(s.lastIndexOf(','), s.lastIndexOf('.'))];
+    var grp = dec === ',' ? '.' : ',';
+    var sides = s.split(dec);
+    if (sides.length !== 2) return null;
+
+    // Если есть группировка до десятичного знака, она должна быть корректной.
+    var groups = sides[0].split(grp);
+    if (
+      groups.length > 1 &&
+      (!/^\d{1,3}$/.test(groups[0]) ||
+       !groups.slice(1).every(function (g) { return /^\d{3}$/.test(g); }))
+    ) return null;
+
+    if (sides[1].indexOf(grp) >= 0) return null;
+    s = groups.join('') + '.' + sides[1];
   } else if (commas + dots === 1) {
-    var sep = commas ? ',' : '.', frac = s.split(sep)[1].length;
-    if (!hasGroup && sep === ',' && frac === 3) s = s.replace(',', '');
-    else s = s.replace(sep, '.');
+    var sep = commas ? ',' : '.';
+    var parts = s.split(sep);
+    var fractionLength = parts[1].length;
+
+    if (
+      !hasGroup && sep === ',' && fractionLength === 3 &&
+      !/^0+$/.test(parts[0])
+    ) {
+      s = parts.join('');
+    } else {
+      s = parts[0] + '.' + parts[1];
+    }
   } else if (commas + dots > 1) {
-    if (commas && dots) return null;
-    s = s.replace(/[.,]/g, '');
+    var separator = commas ? ',' : '.';
+    var pieces = s.split(separator);
+    if (
+      !/^\d{1,3}$/.test(pieces[0]) ||
+      !pieces.slice(1).every(function (g) { return /^\d{3}$/.test(g); })
+    ) return null;
+    s = pieces.join('');
   }
-  if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+
+  if (s.indexOf('.') >= 0) {
+    s = s.replace(/0+$/, '').replace(/\.$/, '');
+  }
   if (s[0] === '.') s = '0' + s;
-  if (!s || isNaN(Number(s))) return null;
+  if (!s || !Number.isFinite(Number(s))) return null;
   return (neg ? '-' : '') + s;
 }
+
 function preparePaste(text) {
+  var scientific = String(text == null ? '' : text)
+    .trim().replace(/−/g, '-');
+
+  if (/^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)[eE][+-]?\d+$/.test(scientific)) {
+    return scientific.replace(',', '.').replace(/[eE]/, 'E');
+  }
+
   var n = normalizePaste(text);
-  return n != null ? n : text.replace(/[\s\u00a0\u2009\u202f'’]/g, '');
+  return n != null
+    ? n
+    : String(text == null ? '' : text)
+        .replace(/[\s\u00a0\u2009\u2005\u202f'’]/g, '');
 }
 
 function evaluate(text, ctx) {
@@ -1330,6 +1389,50 @@ function plain(v) { return fmtNum(v, 15, 'dec', '').replace(/−/g, '-'); }
 // the shown value without separators, put into the expression by «=» and M
 function shownPlain(v) { return fmt(v, false).replace(/−/g, '-'); }
 
+// Явное JSON-представление чисел, которые JSON иначе превращает в null.
+function calcrateNumberReplacer(key, value) {
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    return { '$calcrate.number': String(value) };
+  }
+  return value;
+}
+function calcrateNumberReviver(key, value) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    Object.keys(value).length === 1 &&
+    Object.prototype.hasOwnProperty.call(value, '$calcrate.number')
+  ) {
+    var tag = value['$calcrate.number'];
+    if (tag === 'Infinity') return Infinity;
+    if (tag === '-Infinity') return -Infinity;
+    if (tag === 'NaN') return NaN;
+  }
+  return value;
+}
+
+// Для допустимых целых аргументов избегаем Infinity/Infinity.
+function calcrateCombinator(n, k, permutation) {
+  if (
+    Number.isSafeInteger(n) && Number.isSafeInteger(k) &&
+    n >= 0 && k >= 0 && k <= n
+  ) {
+    var count = permutation ? k : Math.min(k, n - k);
+    if (count > 1000000) throw new CalcError('Слишком много шагов');
+    var result = 1;
+    for (var i = 1; i <= count; i++) {
+      result *= permutation ? (n - i + 1) : (n - count + i) / i;
+      if (!Number.isFinite(result)) return Infinity;
+    }
+    return rnd(result);
+  }
+
+  // Сохраняем прежнее поведение для остальных аргументов.
+  return permutation
+    ? rnd(fact(n) / fact(n - k))
+    : rnd(fact(n) / (fact(k) * fact(n - k)));
+}
+
 /* ================= STATE ================= */
 var STORE = 'calcrate.web.calc';
 var st = {
@@ -1349,7 +1452,7 @@ var st = {
   ]
 };
 try {
-  var saved = JSON.parse(localStorage.getItem(STORE) || 'null');
+  var saved = JSON.parse(localStorage.getItem(STORE) || 'null', calcrateNumberReviver);
   if (saved && Array.isArray(saved.vars)) Object.assign(st, saved);
 } catch (e) {}
 // the caret at the end, a digit continues the number (ExprEditor(text:)); unfinished rows are not kept
@@ -1387,8 +1490,12 @@ if (st.set.az && st.set.az <= st.set.precision) st.set.az = st.set.precision < 1
 if (!LANGS.some(function (l) { return l[0] === st.set.lang; })) st.set.lang = 'ru';
 LANG = st.set.lang;
 if (!Array.isArray(st.kpOrder)) st.kpOrder = [];
+st.nextId = st.vars.concat(st.fns).reduce(function (next, item) {
+  return item && Number.isSafeInteger(item.id)
+    ? Math.max(next, item.id + 1) : next;
+}, Number.isSafeInteger(st.nextId) && st.nextId > 0 ? st.nextId : 1);
 var undoS = [], redoS = [];
-function save() { try { localStorage.setItem(STORE, JSON.stringify(st)); } catch (e) {} }
+function save() { try { localStorage.setItem(STORE, JSON.stringify(st, calcrateNumberReplacer)); } catch (e) {} }
 
 // Names in a formula that can take an argument: variables, ans and names not defined anywhere,
 // in order of appearance. Constants (π, e, φ), functions and the running variable of ∑ ∏ ∂ ∫ are not.
@@ -1538,7 +1645,7 @@ function backspace() {
   if (s[i - 1] === '(') {
     var j = idStartBefore(s, i - 1);
     if (j < i - 1) n = i - j;        // "sin(" as a whole
-  } else if (isIdChar(s[i - 1]) && !/[0-9]/.test(s[i - 1])) {
+  } else if (idStartBefore(s, i) < i) {
     n = Math.max(1, i - idStartBefore(s, i));     // a whole variable name (π, φ — one character)
   }
   st.expr = s.slice(0, i - n) + s.slice(i); st.cur = i - n;
@@ -1570,7 +1677,7 @@ function negate() {
 function moveLeft() {
   st.just = false; if (st.cur === 0) return;
   var s = st.expr, i = st.cur;
-  var j = (isIdChar(s[i - 1]) && !/[0-9]/.test(s[i - 1])) ? idStartBefore(s, i) : i;
+  var j = idStartBefore(s, i);
   st.cur = j < i ? j : i - 1;
 }
 function moveRight() {
@@ -3176,18 +3283,69 @@ document.getElementById('tbPaste').addEventListener('click', function () { hideX
 
 /* ================= SETTINGS ================= */
 var wakeLock = null, awakeT = null;
-// «Не гасить экран»: the screen stays on until st.set.awakeHours hours have passed since the last touch, then dims as usual;
-// 0 — always
-function awakeTick() {
-  var o = st.set; clearTimeout(awakeT);
-  if (!o.awake) { if (wakeLock) { wakeLock.release(); wakeLock = null; } return; }
-  if (!wakeLock && navigator.wakeLock) navigator.wakeLock.request('screen').then(function (w) { wakeLock = w; }, function () {});
-  if (o.awakeHours > 0) awakeT = setTimeout(function () { if (wakeLock) { wakeLock.release(); wakeLock = null; } }, o.awakeHours * 3600000);
+var awakePending = false, awakeLast = Date.now();
+
+function awakeHoursValue() {
+  return Math.max(0, Math.min(99, Number(st.set.awakeHours) || 0));
 }
-document.addEventListener('pointerdown', function () { if (st.set.awake) awakeTick(); }, true);
-document.addEventListener('keydown', function () { if (st.set.awake) awakeTick(); }, true);
+function awakeAllowed() {
+  var hours = awakeHoursValue();
+  return !!st.set.awake &&
+    document.visibilityState === 'visible' &&
+    (!hours || Date.now() - awakeLast < hours * 3600000);
+}
+function releaseAwakeLock(lock) {
+  if (!lock) return;
+  try { Promise.resolve(lock.release()).catch(function () {}); }
+  catch (e) {}
+}
+function awakeTick(activity) {
+  if (activity === true) awakeLast = Date.now();
+  clearTimeout(awakeT);
+
+  if (!awakeAllowed()) {
+    var old = wakeLock;
+    wakeLock = null;
+    releaseAwakeLock(old);
+    return;
+  }
+
+  var hours = awakeHoursValue();
+  if (hours) {
+    awakeT = setTimeout(function () {
+      awakeTick(false);
+    }, Math.max(1, awakeLast + hours * 3600000 - Date.now()));
+  }
+
+  if (wakeLock || awakePending || !navigator.wakeLock) return;
+  awakePending = true;
+
+  try {
+    navigator.wakeLock.request('screen').then(function (lock) {
+      awakePending = false;
+      if (!awakeAllowed()) {
+        releaseAwakeLock(lock);
+        return;
+      }
+      wakeLock = lock;
+      lock.addEventListener('release', function () {
+        if (wakeLock === lock) wakeLock = null;
+      });
+    }, function () {
+      awakePending = false;
+    });
+  } catch (e) {
+    awakePending = false;
+  }
+}
+document.addEventListener('pointerdown', function () {
+  awakeTick(true);
+}, true);
+document.addEventListener('keydown', function () {
+  awakeTick(true);
+}, true);
 document.addEventListener('visibilitychange', function () {
-  if (document.visibilityState === 'visible' && st.set.awake) { wakeLock = null; awakeTick(); }
+  awakeTick(false);
 });
 // leaving the app (the home screen, another tab, closing): the row being edited is finished and all is saved, as the
 // app does when it goes to the background
@@ -3843,7 +4001,7 @@ svg { display: block; flex-shrink: 0; }
 .slist li { position: relative; display: flex; align-items: center; gap: 10px; min-height: 44px; box-sizing: border-box; padding: 6px 16px 6px 20px; }
 .slist li + li::before { content: ""; position: absolute; left: 20px; right: 0; top: 0; height: .5px; background: var(--sep); }
 .sl2 { flex: 1 1 auto; min-width: 0; font-size: 17px; line-height: 22px; color: var(--fg); }
-.seg { flex: 0 1 230px; width: 230px; min-width: 0; display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--segbg); }
+.seg { flex: 0 0 auto; width: min(230px, max(150px, calc(var(--vw, 100vw) - 190px))); min-width: 0; display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--segbg); }
 .seg button { all: unset; flex: 1 1 0; min-width: 0; padding: 7px 0; border-radius: 7px; text-align: center; font-size: 13px; line-height: 16px; font-weight: 600; color: var(--sub); white-space: nowrap; overflow: hidden; cursor: pointer; }
 .seg button.on { background: var(--segon); color: var(--fg); }
 .light .seg button.on { box-shadow: 0 1px 1px rgba(0,0,0,.12); }
@@ -4015,26 +4173,69 @@ svg { display: block; flex-shrink: 0; }
   /* rates: open.er-api.com, one request for all the currencies, at most every 6 hours (ConverterModel.refreshRates);
      until it answers — the last downloaded ones, else the built-in ones above */
   var RKEY = 'calcrate.web.rates', RATES_TTL = 6 * 3600 * 1000;
-  function applyRates(r) { ORDER.forEach(function (c) { if (typeof r[c] === 'number' && r[c] > 0) RATES[c] = r[c]; }); }
+  function validRateSet(r) {
+    return !!r && typeof r === 'object' && r.USD === 1 &&
+      Object.keys(r).filter(function (c) {
+        return /^[A-Z]{3}$/.test(c) &&
+          Number.isFinite(r[c]) && r[c] > 0;
+      }).length >= 100;
+  }
+  function applyRates(r) {
+    if (!validRateSet(r)) return;
+    ORDER.forEach(function (c) {
+      if (Number.isFinite(r[c]) && r[c] > 0) RATES[c] = r[c];
+    });
+  }
   function cachedRates() { try { return JSON.parse(localStorage.getItem(RKEY) || 'null'); } catch (e) { return null; } }
   (function () { var c = cachedRates(); if (c && c.rates) applyRates(c.rates); })();
   var ratesBusy = false;
   function refreshRates() {
     var c = cachedRates();
-    if (ratesBusy || (c && Date.now() - c.t < RATES_TTL) || typeof fetch !== 'function') return;
+    var age = c ? Date.now() - c.t : Infinity;
+    if (
+      ratesBusy ||
+      (c && Number.isFinite(c.t) && age >= 0 &&
+       age < RATES_TTL && validRateSet(c.rates)) ||
+      typeof fetch !== 'function'
+    ) return;
+
     ratesBusy = true;
-    fetch('https://open.er-api.com/v6/latest/USD', { cache: 'no-store' })
-      .then(function (r) { return r.json(); })
+    var controller = typeof AbortController === 'function'
+      ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () {
+      controller.abort();
+    }, 12000) : null;
+
+    var options = { cache: 'no-store' };
+    if (controller) options.signal = controller.signal;
+
+    fetch('https://open.er-api.com/v6/latest/USD', options)
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .then(function (j) {
-        if (!j || j.result !== 'success' || !j.rates || Object.keys(j.rates).length < 100) return;
+        if (!j || j.result !== 'success' || !validRateSet(j.rates)) return;
         applyRates(j.rates);
-        try { localStorage.setItem(RKEY, JSON.stringify({ t: Date.now(), rates: j.rates })); } catch (e) {}
+
+        try {
+          localStorage.setItem(RKEY, JSON.stringify({
+            t: Date.now(), rates: j.rates
+          }));
+        } catch (e) {}
+
         if (window.ConvApp) window.ConvApp.refresh();
-        if (window.CalcApp && window.CalcApp.recalc) window.CalcApp.recalc();
+        if (window.CalcApp && window.CalcApp.recalc) {
+          window.CalcApp.recalc();
+        }
       })
       .catch(function () {})
-      .then(function () { ratesBusy = false; });
+      .then(function () {
+        clearTimeout(timer);
+        ratesBusy = false;
+      });
   }
+
 
   /* Flags: FlagView.draw (Flags.swift) shape by shape, in the same fractions of the width W and the height H;
      the first 20 drawn by hand, the others from FLAGDEFS (FlagShapes) */
@@ -4567,7 +4768,9 @@ svg { display: block; flex-shrink: 0; }
   function toast(m) {
     var t = $('toast'); t.textContent = m; t.classList.add('show');
     // centred in the converter area (between the status bar and the tab bar), or in the open sheet
-    var top = 448.5;
+    var phoneBox = phone.getBoundingClientRect();
+    var layerBox = layer.getBoundingClientRect();
+    var top = (phoneBox.top + phoneBox.bottom) / 2 - layerBox.top;
     if (SH.el) { var r = SH.el.getBoundingClientRect(), lr = layer.getBoundingClientRect(); top = (r.top + r.bottom) / 2 - lr.top; }
     t.style.top = top + 'px'; t.style.zIndex = 60;
     clearTimeout(tT); tT = setTimeout(function () { t.classList.remove('show'); }, 1400);
@@ -4587,7 +4790,10 @@ svg { display: block; flex-shrink: 0; }
   var SH = { el: null, top: 0, drag: null, closing: null };
   var CURVE = 'cubic-bezier(.32,.72,0,1)';
   function LH() { return layer.clientHeight || 912; }
-  function tLarge() { return 78; }                                   // 68 status bar + 10
+  function tLarge() {
+    var safe = parseFloat(getComputedStyle(phoneEl).paddingTop) || 0;
+    return Math.max(0, Math.min(safe + 10, t72() - 1));
+  }                                   // 68 status bar + 10
   function t72() { var H = LH(); return Math.round(H * 0.28 * 100) / 100; }   // 72 % of the screen, 8 pt inside the edges
   function setSheet(el, top, off, ms) {
     var tL = tLarge(), tS = t72(), f = Math.max(0, Math.min(1, (top - tL) / (tS - tL))), ins = +(8 * f).toFixed(2), rb = +(32 * f).toFixed(2), rt = +(38 - 6 * f).toFixed(2);
@@ -5065,7 +5271,7 @@ svg { display: block; flex-shrink: 0; }
 
   /* a physical keyboard types into the converter while its keypad is open; otherwise keys go to the calculator */
   window.addEventListener('keydown', function (e) {
-    if (!S.edit || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!phoneEl.classList.contains('cur') || !S.edit || e.ctrlKey || e.metaKey || e.altKey) return;
     var t = e.composedPath ? e.composedPath()[0] : e.target;
     if (t && t.tagName === 'INPUT') return;
     var map = { Backspace: 'back', Delete: 'clear', Enter: 'done', Escape: 'done', ArrowLeft: 'left', ArrowRight: 'right', Home: 'home', End: 'end', '.': '.', ',': '.' };

@@ -1,27 +1,107 @@
-// CalcRate: the app works offline. Its own files: from the network when it answers (a new version comes at once, the
-// browser's HTTP cache is checked with the site), else from the cache. The rates go straight to their site (the app keeps the last ones itself).
-const CACHE = 'calcrate-v2';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
-  './icon-maskable-512.png', './apple-touch-icon.png'];
+'use strict';
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+const BUILD = '2026.11.17.1';
+const BASE = self.registration.scope;
+const PREFIX = 'calcrate-web:' + BASE + ':';
+const CACHE = PREFIX + BUILD;
+
+const FILES = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './icon-192.png',
+  './icon-512.png',
+  './icon-maskable-512.png',
+  './apple-touch-icon.png'
+];
+
+const ASSETS = new Set(
+  FILES.map(path => new URL(path, BASE).href)
+);
+
+self.addEventListener('install', event => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    const requests = FILES.map(path =>
+      new Request(new URL(path, BASE), {
+        cache: 'reload',
+        credentials: 'same-origin'
+      })
+    );
+
+    // Установка успешна, только если получен весь комплект.
+    await cache.addAll(requests);
+    await self.skipWaiting();
+  })());
 });
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys()
-    .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-    .then(() => self.clients.claim()));
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+
+    // Не трогаем кэши других приложений и областей.
+    await Promise.all(
+      keys
+        .filter(key => key.startsWith(PREFIX) && key !== CACHE)
+        .map(key => caches.delete(key))
+    );
+
+    await self.clients.claim();
+  })());
 });
 
-self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
-  // past the browser's own cache (GitHub Pages lets it keep a file 10 minutes): an update shows at the next start
-  e.respondWith(fetch(new Request(e.request.url, { cache: 'no-cache', credentials: 'same-origin' }))
-    .then((r) => {
-      if (r.ok) { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
-      return r;
-    })
-    .catch(() => caches.match(e.request).then((r) => r || caches.match('./index.html'))));
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  const url = new URL(request.url);
+  const scope = new URL(BASE);
+  const navigation = request.mode === 'navigate';
+
+  if (request.method !== 'GET') return;
+  if (url.origin !== scope.origin) return;
+  if (!url.pathname.startsWith(scope.pathname)) return;
+  if (!navigation && !ASSETS.has(url.href)) return;
+
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+
+    async function fallback() {
+      const exact = await cache.match(request);
+      if (exact) return exact;
+
+      // HTML возвращаем только для перехода на страницу,
+      // но не вместо PNG, JSON, CSS или JavaScript.
+      if (navigation) {
+        return cache.match(new URL('./index.html', BASE).href);
+      }
+
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4500);
+
+    try {
+      const response = await fetch(
+        new Request(request, {
+          cache: 'no-cache',
+          signal: controller.signal
+        })
+      );
+
+      if (response.ok) {
+        try {
+          await cache.put(request, response.clone());
+        } catch (_) {
+          // Ошибка квоты не должна мешать сетевому запуску.
+        }
+        return response;
+      }
+
+      return (await fallback()) || response;
+    } catch (_) {
+      return (await fallback()) || Response.error();
+    } finally {
+      clearTimeout(timer);
+    }
+  })());
 });
