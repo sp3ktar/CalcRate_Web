@@ -4568,17 +4568,125 @@ svg { display: block; flex-shrink: 0; }
     vp.scrollTo({ left: (slot == null ? base() : slot) * vp.clientWidth, behavior: animate ? 'smooth' : 'instant' });
   }
   var settleT = null;
-  function landed() {
-    var n = S.desks.length, w = vp.clientWidth;
-    if (n < 2 || !w) return;
-    var pg = Math.round(vp.scrollLeft / w);
-    if (Math.abs(vp.scrollLeft - pg * w) > 2 || pg === 1) { anim = false; return; }
-    var cur = curPanel(); scrolls[cur.dataset.i] = cur.scrollTop;
-    S.idx = (S.idx + (pg === 2 ? 1 : -1) + n) % n; S.edit = null; anim = false;
-    render();
+  var deskFingerDown = false;
+  var deskSettling = false;
+
+  function scheduleDeskSettle() {
+    clearTimeout(settleT);
+    settleT = setTimeout(landed, 180);
   }
-  vp.addEventListener('scroll', function () { clearTimeout(settleT); settleT = setTimeout(landed, 110); }, { passive: true });
-  vp.addEventListener('scrollend', function () { clearTimeout(settleT); landed(); });
+
+  function landed() {
+    clearTimeout(settleT);
+
+    // Нативное листание на iPhone может вызвать pointercancel,
+    // хотя палец ещё находится на экране. Поэтому состояние
+    // касания отслеживается отдельно через touch-события.
+    if (
+      deskFingerDown ||
+      deskSettling ||
+      (P && P.mode === 'mouse')
+    ) return;
+
+    var n = S.desks.length;
+    var w = vp.clientWidth;
+
+    if (n < 2 || !w) {
+      anim = false;
+      return;
+    }
+
+    var left = vp.scrollLeft;
+    if (!Number.isFinite(left)) {
+      anim = false;
+      place(false);
+      return;
+    }
+
+    // После окончания прокрутки всегда выбираем ближайшую
+    // панель, даже если браузер остановился между столами.
+    var pg = Math.max(0, Math.min(2, Math.round(left / w)));
+
+    deskSettling = true;
+
+    try {
+      if (pg === 1) {
+        anim = false;
+
+        // Короткий жест: текущий стол остаётся выбранным,
+        // но его положение обязательно выравнивается.
+        if (Math.abs(left - w) > 0.5) {
+          place(false);
+        }
+        return;
+      }
+
+      var cur = curPanel();
+      if (cur && cur.dataset.i != null) {
+        scrolls[cur.dataset.i] = cur.scrollTop;
+      }
+
+      S.idx = (S.idx + (pg === 2 ? 1 : -1) + n) % n;
+      S.edit = null;
+      anim = false;
+
+      // renderTrack() перестраивает три панели и помещает
+      // выбранный стол в центр без анимации.
+      render();
+    } finally {
+      deskSettling = false;
+    }
+  }
+
+  vp.addEventListener('touchstart', function () {
+    deskFingerDown = true;
+    clearTimeout(settleT);
+  }, { passive: true });
+
+  function finishDeskTouch(e) {
+    if (!deskFingerDown) return;
+
+    deskFingerDown = !!(e.touches && e.touches.length);
+
+    if (!deskFingerDown) {
+      scheduleDeskSettle();
+    }
+  }
+
+  window.addEventListener('touchend', finishDeskTouch, {
+    passive: true
+  });
+
+  window.addEventListener('touchcancel', finishDeskTouch, {
+    passive: true
+  });
+
+  vp.addEventListener('scroll', function (e) {
+    if (e.target === vp) {
+      scheduleDeskSettle();
+    }
+  }, { passive: true });
+
+  vp.addEventListener('scrollend', function (e) {
+    // Завершение вертикальной прокрутки карточек не должно
+    // завершать горизонтальное листание столов.
+    if (e.target !== vp || deskFingerDown) return;
+    landed();
+  });
+
+  window.addEventListener('blur', function () {
+    deskFingerDown = false;
+    scheduleDeskSettle();
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    deskFingerDown = false;
+    clearTimeout(settleT);
+
+    if (document.visibilityState === 'visible') {
+      scheduleDeskSettle();
+    }
+  });
   function curPanel() { return track.querySelector('.body[data-slot="c"]') || track; }
   function renderTrack() {
     var cur = track.querySelector('.body[data-slot="c"]');
