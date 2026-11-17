@@ -4557,152 +4557,290 @@ svg { display: block; flex-shrink: 0; }
     if (window.CalcApp && CalcApp.addHap) Array.prototype.forEach.call(kp.querySelectorAll('.k'), function (b) { CalcApp.addHap(b); });
   }
 
-  /* Endless carousel: only three panels exist — previous, current, next.
-     A swipe slides to a side panel, then the panels are rebuilt around the new desk and the track
-     snaps back to the middle without animation, so after the last desk comes the first in the same direction. */
+  /*
+   * Карусель с управляемым горизонтальным жестом.
+   * Вертикальная прокрутка остаётся нативной.
+   * Нет ожидания scrollend, smooth-scroll и таймера покоя.
+   */
   var scrolls = {}, anim = false;
-  function base() { return S.desks.length > 1 ? 1 : 0; }
-  /* the desks are pages of a native snapping scroller: the browser decides on the first movement whether
-     the finger pages the desks or scrolls the rows, so a sideways swipe never moves the rows up and down */
+  var deskOffset = 0;
+  var deskMotion = null;
+  var deskRAF = 0;
+  var deskClickUntil = 0;
+  var deskWheel = 0;
+  var deskWheelT = null;
+  var deskWheelUsed = false;
+  var P = null;
+
+  vp.style.overflowX = 'hidden';
+  vp.style.scrollSnapType = 'none';
+  vp.style.touchAction = 'pan-y';
+  track.style.transition = 'none';
+  track.style.willChange = 'transform';
+
+  function base() {
+    return S.desks.length > 1 ? 1 : 0;
+  }
+
+  function deskIndex(delta) {
+    var n = S.desks.length;
+    return (S.idx + delta + n) % n;
+  }
+
+  function deskTitle(delta) {
+    var index = deskIndex(delta || 0);
+    var title = S.desks[index] ? S.desks[index].name : '';
+    var node = $('dn');
+    if (node.textContent !== title) node.textContent = title;
+  }
+
+  function deskPaint(offset) {
+    deskOffset = offset;
+    var x = -base() * vp.clientWidth + offset;
+    track.style.transform = 'translate3d(' + x + 'px,0,0)';
+  }
+
+  function deskCancelMotion() {
+    cancelAnimationFrame(deskRAF);
+    deskRAF = 0;
+    deskMotion = null;
+    anim = false;
+  }
+
+  function deskCancelPress() {
+    if (!P) return;
+    clearTimeout(P.lp);
+    if (P.row) P.row.classList.remove('pinlp', 'lp');
+    P = null;
+  }
+
+  function deskRemember(panel) {
+    if (panel && panel.dataset.i != null) {
+      scrolls[panel.dataset.i] = panel.scrollTop;
+    }
+  }
+
+  function deskMakePanel(index, slot) {
+    var panel = document.createElement('div');
+    panel.className = 'body';
+    panel.dataset.i = index;
+    panel.dataset.slot = slot;
+    panel.style.touchAction = 'pan-y';
+    panel.style.scrollSnapAlign = 'none';
+
+    var current = slot === 'c';
+    if (current && S.edit && !S.settings) {
+      panel.classList.add('kpad');
+    }
+
+    panel.innerHTML = deskHTML(S.desks[index], current);
+    panel._deskScroll = scrolls[index] || 0;
+    return panel;
+  }
+
+  function deskFitPanel(panel) {
+    [].forEach.call(panel.querySelectorAll('.fit'), fit);
+  }
+
+  function deskCloseEditor() {
+    if (DT) {
+      clearTimeout(DT);
+      DT = null;
+    }
+
+    S.edit = null;
+    S.sel = false;
+    S.menu = false;
+    S.fresh = false;
+    $('pmenu').hidden = true;
+
+    kp.classList.remove('open');
+    kp.setAttribute('aria-hidden', 'true');
+    phoneEl.classList.remove('kpopen');
+    $('foot').classList.remove('hid');
+    st.classList.remove('kpad');
+
+    [].forEach.call(track.children, function (panel) {
+      panel.classList.remove('kpad');
+
+      // Соседние панели уже отрисованы без курсора.
+      // На уходящей панели убираем его без полной перерисовки.
+      [].forEach.call(panel.querySelectorAll('.cf'), function (field) {
+        [].forEach.call(field.querySelectorAll('.caret'), function (c) {
+          c.remove();
+        });
+        field.classList.remove('sel');
+      });
+    });
+  }
+
+  function deskCommit(dir) {
+    var n = S.desks.length;
+
+    if (!dir || n < 2) {
+      deskPaint(0);
+      deskTitle(0);
+      return;
+    }
+
+    deskRemember(curPanel());
+    deskCloseEditor();
+
+    S.idx = deskIndex(dir);
+
+    /*
+     * Не вызываем общий render(): он заново строил также
+     * скрытые списки валют, настройки и список столов.
+     *
+     * Вместо этого сохраняем две существующие панели
+     * и добавляем только одного нового соседа.
+     */
+    if (track.children.length === 3) {
+      var added;
+
+      if (dir > 0) {
+        track.removeChild(track.firstElementChild);
+        added = deskMakePanel(deskIndex(1), 'n');
+        track.appendChild(added);
+      } else {
+        track.removeChild(track.lastElementChild);
+        added = deskMakePanel(deskIndex(-1), 'p');
+        track.insertBefore(added, track.firstElementChild);
+      }
+
+      var slots = ['p', 'c', 'n'];
+      [].forEach.call(track.children, function (panel, i) {
+        panel.dataset.slot = slots[i];
+        panel.classList.remove('kpad');
+      });
+
+      // Позиция и заголовок меняются в одной задаче JavaScript.
+      deskPaint(0);
+      deskTitle(0);
+
+      added.scrollTop = added._deskScroll || 0;
+      deskFitPanel(added);
+    } else {
+      renderTrack();
+      deskTitle(0);
+      fitAll();
+    }
+
+    saveConv();
+  }
+
+  function deskFinishMotion() {
+    if (!deskMotion) return;
+    var dir = deskMotion.dir;
+    deskCancelMotion();
+    deskCommit(dir);
+  }
+
+  function deskMoveTo(dir, immediate) {
+    deskCancelMotion();
+
+    if (S.desks.length < 2 || !vp.clientWidth) {
+      deskPaint(0);
+      deskTitle(0);
+      return;
+    }
+
+    dir = dir < 0 ? -1 : dir > 0 ? 1 : 0;
+
+    if (dir) deskCloseEditor();
+
+    // Не ждём инерцию браузера, чтобы поменять название.
+    deskTitle(dir);
+
+    var from = deskOffset;
+    var target = -dir * vp.clientWidth;
+    var reduced = window.matchMedia &&
+      matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (immediate || reduced || Math.abs(target - from) < 0.5) {
+      deskCommit(dir);
+      return;
+    }
+
+    var duration = 170;
+    var started = performance.now();
+    var motion = deskMotion = { dir: dir };
+    anim = true;
+
+    function frame(now) {
+      if (deskMotion !== motion) return;
+
+      var t = Math.min(1, (now - started) / duration);
+      var eased = 1 - Math.pow(1 - t, 3);
+      deskPaint(from + (target - from) * eased);
+
+      if (t < 1) {
+        deskRAF = requestAnimationFrame(frame);
+      } else {
+        deskRAF = 0;
+        deskMotion = null;
+        anim = false;
+        deskCommit(dir);
+      }
+    }
+
+    deskRAF = requestAnimationFrame(frame);
+  }
+
+  // Совместимость с существующими вызовами place() при resize.
   function place(animate, slot) {
-    vp.scrollTo({ left: (slot == null ? base() : slot) * vp.clientWidth, behavior: animate ? 'smooth' : 'instant' });
+    if (animate) {
+      deskMoveTo(
+        slot == null ? 0 : Math.max(-1, Math.min(1, slot - base())),
+        false
+      );
+    } else {
+      deskCancelMotion();
+      deskCancelPress();
+      vp.scrollLeft = 0;
+      deskPaint(0);
+      deskTitle(0);
+    }
   }
-  var settleT = null;
-  var deskFingerDown = false;
-  var deskSettling = false;
 
-  function scheduleDeskSettle() {
-    clearTimeout(settleT);
-    settleT = setTimeout(landed, 180);
+  function curPanel() {
+    return track.querySelector('.body[data-slot="c"]') || track;
   }
 
-  function landed() {
-    clearTimeout(settleT);
-
-    // Нативное листание на iPhone может вызвать pointercancel,
-    // хотя палец ещё находится на экране. Поэтому состояние
-    // касания отслеживается отдельно через touch-события.
-    if (
-      deskFingerDown ||
-      deskSettling ||
-      (P && P.mode === 'mouse')
-    ) return;
+  function renderTrack() {
+    deskCancelMotion();
+    deskCancelPress();
+    deskRemember(track.querySelector('.body[data-slot="c"]'));
 
     var n = S.desks.length;
-    var w = vp.clientWidth;
+    var slots = n > 1
+      ? [[deskIndex(-1), 'p'], [S.idx, 'c'], [deskIndex(1), 'n']]
+      : [[S.idx, 'c']];
 
-    if (n < 2 || !w) {
-      anim = false;
-      return;
-    }
+    var fragment = document.createDocumentFragment();
 
-    var left = vp.scrollLeft;
-    if (!Number.isFinite(left)) {
-      anim = false;
-      place(false);
-      return;
-    }
+    slots.forEach(function (entry) {
+      fragment.appendChild(deskMakePanel(entry[0], entry[1]));
+    });
 
-    // После окончания прокрутки всегда выбираем ближайшую
-    // панель, даже если браузер остановился между столами.
-    var pg = Math.max(0, Math.min(2, Math.round(left / w)));
+    track.replaceChildren(fragment);
+    vp.scrollLeft = 0;
+    deskPaint(0);
+    deskTitle(0);
 
-    deskSettling = true;
+    [].forEach.call(track.children, function (panel) {
+      panel.scrollTop = panel._deskScroll || 0;
+    });
 
-    try {
-      if (pg === 1) {
-        anim = false;
-
-        // Короткий жест: текущий стол остаётся выбранным,
-        // но его положение обязательно выравнивается.
-        if (Math.abs(left - w) > 0.5) {
-          place(false);
-        }
-        return;
-      }
-
-      var cur = curPanel();
-      if (cur && cur.dataset.i != null) {
-        scrolls[cur.dataset.i] = cur.scrollTop;
-      }
-
-      S.idx = (S.idx + (pg === 2 ? 1 : -1) + n) % n;
-      S.edit = null;
-      anim = false;
-
-      // renderTrack() перестраивает три панели и помещает
-      // выбранный стол в центр без анимации.
-      render();
-    } finally {
-      deskSettling = false;
-    }
-  }
-
-  vp.addEventListener('touchstart', function () {
-    deskFingerDown = true;
-    clearTimeout(settleT);
-  }, { passive: true });
-
-  function finishDeskTouch(e) {
-    if (!deskFingerDown) return;
-
-    deskFingerDown = !!(e.touches && e.touches.length);
-
-    if (!deskFingerDown) {
-      scheduleDeskSettle();
-    }
-  }
-
-  window.addEventListener('touchend', finishDeskTouch, {
-    passive: true
-  });
-
-  window.addEventListener('touchcancel', finishDeskTouch, {
-    passive: true
-  });
-
-  vp.addEventListener('scroll', function (e) {
-    if (e.target === vp) {
-      scheduleDeskSettle();
-    }
-  }, { passive: true });
-
-  vp.addEventListener('scrollend', function (e) {
-    // Завершение вертикальной прокрутки карточек не должно
-    // завершать горизонтальное листание столов.
-    if (e.target !== vp || deskFingerDown) return;
-    landed();
-  });
-
-  window.addEventListener('blur', function () {
-    deskFingerDown = false;
-    scheduleDeskSettle();
-  });
-
-  document.addEventListener('visibilitychange', function () {
-    deskFingerDown = false;
-    clearTimeout(settleT);
-
-    if (document.visibilityState === 'visible') {
-      scheduleDeskSettle();
-    }
-  });
-  function curPanel() { return track.querySelector('.body[data-slot="c"]') || track; }
-  function renderTrack() {
-    var cur = track.querySelector('.body[data-slot="c"]');
-    if (cur) scrolls[cur.dataset.i] = cur.scrollTop;
-    var n = S.desks.length, i = S.idx;
-    var slots = n > 1 ? [[(i - 1 + n) % n, 'p'], [i, 'c'], [(i + 1) % n, 'n']] : [[i, 'c']];
-    track.innerHTML = slots.map(function (x) {
-      var c = x[1] === 'c';
-      return '<div class="body' + (c && S.edit && !S.settings ? ' kpad' : '') + '" data-i="' + x[0] + '" data-slot="' + x[1] + '">' + deskHTML(S.desks[x[0]], c) + '</div>';
-    }).join('');
-    [].forEach.call(track.children, function (el) { if (el.dataset.slot === 'c' && scrolls[el.dataset.i]) el.scrollTop = scrolls[el.dataset.i]; });
-    place(false);
     if (S.feeAnim !== null) {
-      var card = curPanel().querySelector('.fee'), on = D().feeOn;
+      var card = curPanel().querySelector('.fee');
+      var on = D().feeOn;
       S.feeAnim = null;
-      if (card) { void card.offsetHeight; card.classList.toggle('open', on); }
+
+      if (card) {
+        void card.offsetHeight;
+        card.classList.toggle('open', on);
+      }
     }
   }
   function renderFoot() {
@@ -4884,13 +5022,13 @@ svg { display: block; flex-shrink: 0; }
     clearTimeout(tT); tT = setTimeout(function () { t.classList.remove('show'); }, 1400);
   }
   function go(dir) {
-    var n = S.desks.length;
-    if (S.manage || anim || n < 2) { place(true); return; }
-    anim = true;
-    if (S.edit) { S.edit = null; kp.classList.remove('open'); phoneEl.classList.remove('kpopen'); $('foot').classList.remove('hid'); }
-    place(true, 1 + dir);
-  }
+    if (S.manage || S.settings || S.sheet || S.desks.length < 2) return;
 
+    // Повторное нажатие не теряется из-за anim.
+    deskFinishMotion();
+    deskCancelPress();
+    deskMoveTo(dir < 0 ? -1 : 1, false);
+  }
   /* ---- sheets: .presentationDetents([.fraction(0.72), .large]) on iOS 26 ----
      At 72 % the sheet floats 8 pt inside the screen edges with all corners rounded (32); at .large its top is 10 pt
      under the status bar, it sits on the side and bottom edges and only its top corners are rounded (38). Drag the grabber or the header to move it,
@@ -5322,61 +5460,256 @@ svg { display: block; flex-shrink: 0; }
   }
   window.addEventListener('pointerup', endDR); window.addEventListener('pointercancel', endDR);
 
-  /* short or long horizontal swipes change desks; hold the flag 0.5 s to pin the row, the rest of a row 1 s to copy */
-  var P = null;
-  vp.addEventListener('pointerdown', function (e) {
-    if (e.button || e.target.closest('.mrow')) return;
-    P = { x: e.clientX, y: e.clientY, t: performance.now(), mode: null, dx: 0, mouse: e.pointerType === 'mouse', sl: vp.scrollLeft };
-    var row = e.target.closest('.row');
-    if (row && e.clientX - row.getBoundingClientRect().left < 120) {
-      row.classList.add('pinlp'); P.row = row;
-      P.lp = setTimeout(function () {
-        if (!P || P.mode) return;
-        P.mode = 'lp'; suppress = true; row.classList.remove('pinlp'); buzz();
-        pinToggle(row.dataset.code);
-      }, 500);
-    } else if (row) {
-      var field = S.edit === 'amount' && row.classList.contains('base') && row.closest('.body').dataset.slot === 'c';
-      P.lp = setTimeout(function () {
-        if (!P || P.mode) return;
-        P.mode = 'lp'; suppress = true; buzz();
-        if (field) { S.menu = true; S.menuAt = performance.now(); render(); return; }   // the field being typed: «Вставить», as in any field on iOS
-        row.classList.add('lp');
-        CalcApp.clipWrite(row.dataset.copy);
-        P.copy = row.dataset.copy;
-        toast(T('Скопировано: {0}', [fmt(+row.dataset.copy)]));
-        setTimeout(function () { row.classList.remove('lp'); }, 180);
-      }, field ? 500 : 1000);
-    }
-  });
-  vp.addEventListener('pointermove', function (e) {
-    if (!P) return;
-    var dx = e.clientX - P.x, dy = e.clientY - P.y;
-    if (!P.mode) {
-      if (P.mouse && !anim && !S.manage && S.desks.length > 1 && Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) {
-        // with a mouse the page is dragged by hand (touch and trackpads scroll natively)
-        P.mode = 'mouse'; clearTimeout(P.lp); if (P.row) P.row.classList.remove('pinlp'); vp.style.scrollSnapType = 'none';
-        try { vp.setPointerCapture(e.pointerId); } catch (err) {}
-      } else if (Math.abs(dx) > 8 || Math.abs(dy) > 8) { P.mode = 'move'; clearTimeout(P.lp); if (P.row) P.row.classList.remove('pinlp'); }
-    }
-    if (P.mode === 'mouse') { P.dx = dx; vp.scrollLeft = P.sl - dx; }
-  });
-  vp.addEventListener('pointerup', function () {
-    if (!P) return; clearTimeout(P.lp); if (P.row) P.row.classList.remove('pinlp');
-    if (P.copy) CalcApp.clipWrite(P.copy);
-    if (P.mode === 'move') suppress = true;
-    if (P.mode === 'mouse') {
-      suppress = true; vp.style.scrollSnapType = '';
-      var v = Math.abs(P.dx) / Math.max(1, performance.now() - P.t);
-      if (Math.abs(P.dx) > 16 || v > .1) { anim = true; place(true, base() + (P.dx < 0 ? 1 : -1)); } else place(true);
-    }
-    setTimeout(function () { suppress = false; }, 60);
-    P = null;
-  });
-  vp.addEventListener('pointercancel', function () { if (P) { clearTimeout(P.lp); if (P.row) P.row.classList.remove('pinlp'); P = null; } });
-  vp.addEventListener('contextmenu', function (e) { if (e.target.closest('.row')) e.preventDefault(); });
-  window.addEventListener('resize', function () { place(false); fitAll(); });
+  /*
+   * Горизонтальный жест — управляемая карусель.
+   * Вертикальный — обычная прокрутка списка.
+   * Удержание флага/карточки сохраняет прежнее назначение.
+   */
 
+  function deskBlockClick() {
+    deskClickUntil = Date.now() + 450;
+  }
+
+  vp.addEventListener('click', function (e) {
+    if (Date.now() < deskClickUntil) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }, true);
+
+  vp.addEventListener('pointerdown', function (e) {
+    if (
+      e.button ||
+      e.isPrimary === false ||
+      S.manage ||
+      S.settings ||
+      S.sheet ||
+      e.target.closest('.mrow')
+    ) return;
+
+    // Быстрый следующий свайп начинает новый переход,
+    // а не упирается в флаг предыдущей анимации.
+    deskFinishMotion();
+    deskCancelPress();
+
+    var g = P = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      lastX: e.clientX,
+      lastT: performance.now(),
+      vx: 0,
+      mode: null,
+      dx: 0,
+      copy: null,
+      row: null,
+      lp: null
+    };
+
+    var row = e.target.closest('.row');
+    var panel = row && row.closest('.body');
+
+    // Удержание относится только к выбранному столу.
+    if (!row || !panel || panel.dataset.slot !== 'c') return;
+
+    var flag = e.clientX - row.getBoundingClientRect().left < 120;
+    var field = S.edit === 'amount' && row.classList.contains('base');
+
+    g.row = row;
+    if (flag) row.classList.add('pinlp');
+
+    g.lp = setTimeout(function () {
+      if (P !== g || g.mode || !row.isConnected) return;
+
+      g.mode = 'lp';
+      row.classList.remove('pinlp');
+      deskBlockClick();
+      buzz();
+
+      if (flag) {
+        pinToggle(row.dataset.code);
+      } else if (field) {
+        S.menu = true;
+        S.menuAt = performance.now();
+        render();
+      } else {
+        row.classList.add('lp');
+        g.copy = row.dataset.copy;
+        CalcApp.clipWrite(g.copy);
+        toast(T('Скопировано: {0}', [fmt(+g.copy)]));
+
+        setTimeout(function () {
+          row.classList.remove('lp');
+        }, 180);
+      }
+    }, flag || field ? 500 : 1000);
+  });
+
+  window.addEventListener('pointermove', function (e) {
+    var g = P;
+    if (!g || e.pointerId !== g.id || g.mode === 'lp') return;
+
+    var dx = e.clientX - g.x;
+    var dy = e.clientY - g.y;
+
+    if (!g.mode) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+
+      clearTimeout(g.lp);
+      if (g.row) g.row.classList.remove('pinlp');
+
+      if (Math.abs(dy) >= Math.abs(dx)) {
+        // Браузер продолжит вертикальную прокрутку.
+        deskCancelPress();
+        return;
+      }
+
+      g.mode = 'horizontal';
+      deskBlockClick();
+
+      try {
+        vp.setPointerCapture(g.id);
+      } catch (_) {}
+    }
+
+    if (g.mode !== 'horizontal') return;
+    if (e.cancelable) e.preventDefault();
+
+    var now = performance.now();
+    var dt = now - g.lastT;
+
+    if (dt > 0) {
+      g.vx = 0.65 * ((e.clientX - g.lastX) / dt) + 0.35 * g.vx;
+    }
+
+    g.lastX = e.clientX;
+    g.lastT = now;
+    g.dx = dx;
+
+    if (S.desks.length < 2) return;
+
+    var w = vp.clientWidth;
+    if (!w) return;
+
+    var offset = Math.max(-w, Math.min(w, dx));
+    deskPaint(offset);
+
+    // Название соответствует преобладающей видимой панели.
+    deskTitle(
+      Math.abs(offset) >= w / 2 ? (offset < 0 ? 1 : -1) : 0
+    );
+  }, { passive: false });
+
+  function deskPointerEnd(e, cancelled) {
+    var g = P;
+    if (!g || e.pointerId !== g.id) return;
+
+    P = null;
+    clearTimeout(g.lp);
+
+    if (g.row) g.row.classList.remove('pinlp', 'lp');
+
+    if (g.copy && !cancelled) {
+      // Повтор в настоящем событии отпускания для iPhone.
+      CalcApp.clipWrite(g.copy);
+    }
+
+    if (g.mode !== 'horizontal') return;
+
+    deskBlockClick();
+
+    var w = vp.clientWidth;
+    var velocity = performance.now() - g.lastT < 90 ? g.vx : 0;
+    var offset = deskOffset;
+    var distance = Math.abs(offset);
+
+    var shouldChange = !cancelled && w > 0 && (
+      distance >= w * 0.22 ||
+      (distance >= 18 && Math.abs(velocity) >= 0.35)
+    );
+
+    // При развороте пальца используем проекцию последнего движения.
+    var projected = offset + velocity * 100;
+    var dir = shouldChange
+      ? (projected < 0 ? 1 : projected > 0 ? -1 : (offset < 0 ? 1 : -1))
+      : 0;
+
+    deskMoveTo(dir, false);
+  }
+
+  window.addEventListener('pointerup', function (e) {
+    deskPointerEnd(e, false);
+  });
+
+  window.addEventListener('pointercancel', function (e) {
+    deskPointerEnd(e, true);
+  });
+
+  // Дополнительная защита от горизонтального нативного скролла.
+  vp.addEventListener('touchmove', function (e) {
+    if (P && P.mode === 'horizontal' && e.cancelable) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // Горизонтальный трекпад на компьютере.
+  vp.addEventListener('wheel', function (e) {
+    if (
+      S.manage ||
+      S.settings ||
+      S.sheet ||
+      S.desks.length < 2 ||
+      Math.abs(e.deltaX) <= Math.abs(e.deltaY)
+    ) return;
+
+    if (e.cancelable) e.preventDefault();
+
+    clearTimeout(deskWheelT);
+    deskWheelT = setTimeout(function () {
+      deskWheel = 0;
+      deskWheelUsed = false;
+    }, 160);
+
+    if (deskWheelUsed) return;
+
+    var unit = e.deltaMode === 1 ? 16
+      : e.deltaMode === 2 ? vp.clientWidth : 1;
+
+    deskWheel += e.deltaX * unit;
+
+    if (Math.abs(deskWheel) >= 35) {
+      deskWheelUsed = true;
+      go(deskWheel > 0 ? 1 : -1);
+    }
+  }, { passive: false });
+
+  vp.addEventListener('contextmenu', function (e) {
+    if (e.target.closest('.row')) e.preventDefault();
+  });
+
+  window.addEventListener('resize', function () {
+    deskFinishMotion();
+    place(false);
+    fitAll();
+  });
+
+  window.addEventListener('blur', function () {
+    deskCancelPress();
+    deskFinishMotion();
+    deskPaint(0);
+    deskTitle(0);
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    deskCancelPress();
+    deskFinishMotion();
+    deskPaint(0);
+    deskTitle(0);
+
+    if (document.visibilityState === 'hidden') {
+      saveConvNow();
+    }
+  });
   /* a physical keyboard types into the converter while its keypad is open; otherwise keys go to the calculator */
   window.addEventListener('keydown', function (e) {
     if (!phoneEl.classList.contains('cur') || !S.edit || e.ctrlKey || e.metaKey || e.altKey) return;
